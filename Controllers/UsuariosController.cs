@@ -7,6 +7,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ApiEmprendimiento.Context;
 using ApiEmprendimiento.Models;
+using ApiEmprendimiento.Dtos;
+using Microsoft.CodeAnalysis.Scripting;
+using Org.BouncyCastle.Crypto.Generators;
+using BCrypt.Net;
 
 namespace ApiEmprendimiento.Controllers
 {
@@ -73,15 +77,58 @@ namespace ApiEmprendimiento.Controllers
             return NoContent();
         }
 
-        // POST: api/Usuarios
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        // POST: api/Usuarios  
+        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754  
         [HttpPost]
-        public async Task<ActionResult<Usuario>> PostUsuario(Usuario usuario)
+        public async Task<ActionResult<Usuario>> PostUsuario(UsuarioCreateDto usuarioDto)
         {
-            _context.usuarios.Add(usuario);
+            if (usuarioDto == null)
+            {
+                return BadRequest("El objeto de usuario no puede ser nulo.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            // Validar contraseña
+            if (string.IsNullOrWhiteSpace(usuarioDto.Contrasena))
+            {
+                return BadRequest("La contraseña es requerida.");
+            }
+
+            Emprendimiento? emprendimiento = null;
+
+            // ... (código existente para obtener/crear emprendimiento) ...
+
+            // CREAR USUARIO CORRECTAMENTE
+            var nuevoUsuario = new Usuario
+            {
+                Id = Guid.NewGuid(),
+                Nombre = usuarioDto.Nombre,
+                Email = usuarioDto.Email,
+                Contrasena = BCrypt.Net.BCrypt.HashPassword(usuarioDto.Contrasena), // Hash correcto
+                EmprendimientoId = emprendimiento.Id,
+                Emprendimiento = emprendimiento,
+                Ventas = new List<Venta>() // Sintaxis corregida
+            };
+
+            _context.usuarios.Add(nuevoUsuario);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetUsuario", new { id = usuario.Id }, usuario);
+            // Respuesta sin datos sensibles
+            return CreatedAtAction(nameof(GetUsuario), new { id = nuevoUsuario.Id }, new
+            {
+                nuevoUsuario.Id,
+                nuevoUsuario.Nombre,
+                nuevoUsuario.Email,
+                Emprendimiento = new
+                {
+                    Id = emprendimiento.Id,
+                    Nombre = emprendimiento.Nombre
+                }
+            });
         }
 
         // DELETE: api/Usuarios/5

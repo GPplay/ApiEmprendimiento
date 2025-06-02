@@ -5,6 +5,7 @@ namespace ApiEmprendimiento.Models
 {
     public class Usuario
     {
+
         [Key]
         public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -17,13 +18,17 @@ namespace ApiEmprendimiento.Models
         [MaxLength(255)]
         public required string Email { get; set; }
 
+                // Cambiar la visibilidad de 'Contrasena' a 'public' para cumplir con el requisito de visibilidad.  
+        [Required]
+        public required string Contrasena { get; set; }
+
         [Required]
         public Guid EmprendimientoId { get; set; }
 
         [ForeignKey(nameof(EmprendimientoId))]
         public required Emprendimiento Emprendimiento { get; set; }
 
-        // Relación opcional con Ventas
+        // Relación opcional con Ventas  
         public ICollection<Venta> Ventas { get; set; } = new List<Venta>();
     }
 }
