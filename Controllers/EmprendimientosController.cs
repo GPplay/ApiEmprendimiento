@@ -24,9 +24,18 @@ namespace ApiEmprendimiento.Controllers
 
         // GET: api/Emprendimientos
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Emprendimiento>>> GetEmprendimientos()
+        public async Task<ActionResult<IEnumerable<object>>> GetEmprendimientos()
         {
-            return await _context.Emprendimientos.ToListAsync();
+            return await _context.Emprendimientos
+         .Include(e => e.Usuarios) // Cargar usuarios relacionados
+         .Select(e => new
+         {
+             e.Id,
+             Nombre = e.Nombre, // Corregir nombre de propiedad
+             e.Descripcion,
+             Usuarios = e.Usuarios.Select(u => u.Nombre).ToList() // Solo nombres
+         })
+         .ToListAsync();
         }
 
         // GET: api/Emprendimientos/5
