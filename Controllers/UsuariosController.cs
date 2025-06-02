@@ -83,51 +83,97 @@ namespace ApiEmprendimiento.Controllers
         public async Task<ActionResult<Usuario>> PostUsuario(UsuarioCreateDto usuarioDto)
         {
             if (usuarioDto == null)
-            {
-                return BadRequest("El objeto de usuario no puede ser nulo.");
-            }
+                return BadRequest("Datos de usuario inválidos");
 
             if (!ModelState.IsValid)
-            {
                 return BadRequest(ModelState);
-            }
 
-            // Validar contraseña
-            if (string.IsNullOrWhiteSpace(usuarioDto.Contrasena))
-            {
-                return BadRequest("La contraseña es requerida.");
-            }
+            // Validar email único
+            if (await _context.usuarios.AnyAsync(u => u.Email == usuarioDto.Email))
+                return BadRequest("El email ya está registrado");
 
             Emprendimiento? emprendimiento = null;
+            bool usarEmprendimientoExistente = false;
+            bool crearNuevoEmprendimiento = false;
 
-            // ... (código existente para obtener/crear emprendimiento) ...
+            // Manejo de emprendimientoId como string
+            if (!string.IsNullOrWhiteSpace(usuarioDto.EmprendimientoId))
+            {
+                if (Guid.TryParse(usuarioDto.EmprendimientoId, out Guid emprendimientoIdGuid))
+                {
+                    emprendimiento = await _context.Emprendimientos.FindAsync(emprendimientoIdGuid);
 
-            // CREAR USUARIO CORRECTAMENTE
+                    if (emprendimiento != null)
+                    {
+                        usarEmprendimientoExistente = true;
+                    }
+                    else
+                    {
+                        return BadRequest($"El emprendimiento con ID {usuarioDto.EmprendimientoId} no existe");
+                    }
+                }
+                else
+                {
+                    return BadRequest("El ID de emprendimiento no es válido");
+                }
+            }
+
+            // Validar nuevo emprendimiento
+            if (usuarioDto.NuevoEmprendimiento != null)
+            {
+                if (string.IsNullOrWhiteSpace(usuarioDto.NuevoEmprendimiento.Nombre))
+                {
+                    return BadRequest("El nombre del nuevo emprendimiento es obligatorio");
+                }
+
+                // Solo permitir crear nuevo emprendimiento si no se usará uno existente
+                if (!usarEmprendimientoExistente)
+                {
+                    crearNuevoEmprendimiento = true;
+                }
+            }
+
+            // Validar que se haya seleccionado una opción válida
+            if (!usarEmprendimientoExistente && !crearNuevoEmprendimiento)
+            {
+                return BadRequest("Debe especificar un emprendimiento existente válido o crear uno nuevo");
+            }
+
+            // Crear nuevo emprendimiento si es necesario
+            if (crearNuevoEmprendimiento)
+            {
+                emprendimiento = new Emprendimiento
+                {
+                    Id = Guid.NewGuid(),
+                    Nombre = usuarioDto.NuevoEmprendimiento!.Nombre,
+                    Descripcion = usuarioDto.NuevoEmprendimiento.Descripcion
+                };
+
+                _context.Emprendimientos.Add(emprendimiento);
+                await _context.SaveChangesAsync();
+            }
+
+            // Crear usuario
             var nuevoUsuario = new Usuario
             {
                 Id = Guid.NewGuid(),
                 Nombre = usuarioDto.Nombre,
                 Email = usuarioDto.Email,
-                Contrasena = BCrypt.Net.BCrypt.HashPassword(usuarioDto.Contrasena), // Hash correcto
-                EmprendimientoId = emprendimiento.Id,
-                Emprendimiento = emprendimiento,
-                Ventas = new List<Venta>() // Sintaxis corregida
+                Contrasena = BCrypt.Net.BCrypt.HashPassword(usuarioDto.Contrasena),
+                EmprendimientoId = emprendimiento!.Id,
+                Emprendimiento = emprendimiento
             };
 
             _context.usuarios.Add(nuevoUsuario);
             await _context.SaveChangesAsync();
 
-            // Respuesta sin datos sensibles
             return CreatedAtAction(nameof(GetUsuario), new { id = nuevoUsuario.Id }, new
             {
                 nuevoUsuario.Id,
                 nuevoUsuario.Nombre,
                 nuevoUsuario.Email,
-                Emprendimiento = new
-                {
-                    Id = emprendimiento.Id,
-                    Nombre = emprendimiento.Nombre
-                }
+                EmprendimientoId = emprendimiento.Id,
+                EmprendimientoNombre = emprendimiento.Nombre
             });
         }
 
