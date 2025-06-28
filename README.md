@@ -1,5 +1,5 @@
 # ApiEmprendimiento
-Sistema de Gestión de Snacks y Aprendizaje
+Sistema de Gestión Emprendimientos
 https://img.shields.io/badge/License-MIT-green.svg
 https://img.shields.io/badge/.NET-8.0-512BD4
 https://img.shields.io/badge/Flutter-3.22-02569B
