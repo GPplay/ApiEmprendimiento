@@ -1,13 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using ApiEmprendimiento.Context;
+using ApiEmprendimiento.Dtos;
+using ApiEmprendimiento.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using ApiEmprendimiento.Context;
-using ApiEmprendimiento.Models;
-using ApiEmprendimiento.Dtos;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace ApiEmprendimiento.Controllers
 {
@@ -76,26 +77,31 @@ namespace ApiEmprendimiento.Controllers
 
         // POST: api/Productos
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost("{emprendimientoId}")]
-        public async Task<ActionResult<Producto>> PostProducto(Guid emprendimientoId, [FromBody] ProductoCreateDto dto)
+        [Authorize]
+        [HttpPost]
+        public async Task<ActionResult<Producto>> PostProducto([FromBody] ProductoCreateDto dto)
         {
-            // Validar modelo recibido
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            // Obtener el emprendimiento
-            var emprendimiento = await _context.Emprendimientos.FindAsync(emprendimientoId);
+            // Extraer el claim de EmprendimientoId del JWT
+            var emprendimientoIdClaim = User.FindFirst("emprendimientoId")?.Value;
+            if (emprendimientoIdClaim == null)
+                return Unauthorized("No se encontró el EmprendimientoId en el token.");
+
+            if (!Guid.TryParse(emprendimientoIdClaim, out var parsedEmprendimientoId))
+                return Unauthorized("EmprendimientoId inválido.");
+
+            var emprendimiento = await _context.Emprendimientos.FindAsync(parsedEmprendimientoId);
             if (emprendimiento == null)
                 return NotFound("No se encontró el emprendimiento.");
 
-            // Obtener el inventario asociado al emprendimiento
             var inventario = await _context.Inventarios
-                .FirstOrDefaultAsync(i => i.EmprendimientoId == emprendimientoId);
+                .FirstOrDefaultAsync(i => i.EmprendimientoId == parsedEmprendimientoId);
 
             if (inventario == null)
-                return BadRequest("No se encontró un inventario asociado al emprendimiento.");
+                return BadRequest("No se encontró inventario asociado al emprendimiento.");
 
-            // Crear el producto
             var producto = new Producto
             {
                 Id = Guid.NewGuid(),
@@ -104,7 +110,7 @@ namespace ApiEmprendimiento.Controllers
                 CostoFabricacion = dto.CostoFabricacion,
                 PrecioVenta = dto.PrecioVenta,
                 FechaCreacion = DateTimeOffset.UtcNow,
-                EmprendimientoId = emprendimiento.Id,
+                EmprendimientoId = parsedEmprendimientoId,
                 Emprendimiento = emprendimiento,
                 InventarioId = inventario.Id,
                 Inventario = inventario
