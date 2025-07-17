@@ -46,15 +46,9 @@ namespace ApiEmprendimiento.Context
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Producto>()
-                .HasOne(p => p.Emprendimiento)
-                .WithMany(e => e.Productos)
-                .HasForeignKey(p => p.EmprendimientoId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder.Entity<Inventario>()
-                .HasOne(i => i.Producto)
-                .WithOne(p => p.Inventario)
-                .HasForeignKey<Inventario>(i => i.ProductoId)
+                .HasOne(p => p.Inventario)
+                .WithMany(i => i.Productos)
+                .HasForeignKey(p => p.InventarioId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<DetalleVenta>()

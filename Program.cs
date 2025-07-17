@@ -1,18 +1,42 @@
-using ApiEmprendimiento.Context;
+﻿using ApiEmprendimiento.Context;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// -------------------------
+//  Configuración de JWT
+// -------------------------
 
-//variable de cadena de conexion
+var jwtKey = builder.Configuration["Jwt:Key"] ?? "clave_super_secreta";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ApiEmprendimiento";
+
+// -------------------------
+//  Conexión a la base de datos
+// -------------------------
 
 var connectionString = builder.Configuration.GetConnectionString("Connection");
-
-//registrar los servicios para la conexion a la base de datos
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString));
+
+// -------------------------
+//  Servicios de controladores
+// -------------------------
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("CorsPolicy", policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
@@ -20,13 +44,38 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
 });
 
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+// -------------------------
+//  Servicios de autenticación JWT
+// -------------------------
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtIssuer,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        };
+    });
+
+// -------------------------
+//  Documentación Swagger
+// -------------------------
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// -------------------------
+// Construcción de la app
+// -------------------------
+
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -35,6 +84,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication(); // Autenticación JWT
 app.UseAuthorization();
 
 app.MapControllers();

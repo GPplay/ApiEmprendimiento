@@ -27,8 +27,14 @@ namespace ApiEmprendimiento.Models
         [Required]
         public DateTimeOffset FechaCreacion { get; set; } = DateTimeOffset.UtcNow;
 
-        // Relaciones
-        public required Inventario Inventario { get; set; }
+        // Clave foránea hacia Inventario
+        [Required]
+        public Guid InventarioId { get; set; }
+
+        [ForeignKey(nameof(InventarioId))]
+        public Inventario Inventario { get; set; } = null!;
+
+        // Relación con Detalles de venta (si aplica)
         public ICollection<DetalleVenta> DetallesVenta { get; set; } = new List<DetalleVenta>();
 
     }
