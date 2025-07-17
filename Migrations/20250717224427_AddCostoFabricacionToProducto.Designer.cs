@@ -4,6 +4,7 @@ using ApiEmprendimiento.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ApiEmprendimiento.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250717224427_AddCostoFabricacionToProducto")]
+    partial class AddCostoFabricacionToProducto
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -79,15 +82,10 @@ namespace ApiEmprendimiento.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("int");
 
-                    b.Property<Guid>("EmprendimientoId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<DateTimeOffset>("FechaActualizacion")
                         .HasColumnType("datetimeoffset");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("EmprendimientoId");
 
                     b.ToTable("Inventarios");
                 });
@@ -204,17 +202,6 @@ namespace ApiEmprendimiento.Migrations
                     b.Navigation("Venta");
                 });
 
-            modelBuilder.Entity("ApiEmprendimiento.Models.Inventario", b =>
-                {
-                    b.HasOne("ApiEmprendimiento.Models.Emprendimiento", "Emprendimiento")
-                        .WithMany("Inventarios")
-                        .HasForeignKey("EmprendimientoId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Emprendimiento");
-                });
-
             modelBuilder.Entity("ApiEmprendimiento.Models.Producto", b =>
                 {
                     b.HasOne("ApiEmprendimiento.Models.Emprendimiento", "Emprendimiento")
@@ -257,8 +244,6 @@ namespace ApiEmprendimiento.Migrations
 
             modelBuilder.Entity("ApiEmprendimiento.Models.Emprendimiento", b =>
                 {
-                    b.Navigation("Inventarios");
-
                     b.Navigation("Productos");
 
                     b.Navigation("Usuarios");

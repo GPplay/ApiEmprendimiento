@@ -16,7 +16,11 @@ namespace ApiEmprendimiento.Models
 
         [Required]
         [Range(0, 99999999.99)]
-        public decimal Precio { get; set; }
+        public decimal CostoFabricacion { get; set; }
+
+        [Required]
+        [Range(0, 99999999.99)]
+        public decimal PrecioVenta { get; set; }
 
         [Required]
         public Guid EmprendimientoId { get; set; }

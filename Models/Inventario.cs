@@ -17,5 +17,10 @@ namespace ApiEmprendimiento.Models
 
         // Relación uno a muchos: un inventario puede tener muchos productos
         public ICollection<Producto> Productos { get; set; } = new List<Producto>();
+
+        public Guid EmprendimientoId { get; set; }
+
+        [ForeignKey(nameof(EmprendimientoId))]
+        public Emprendimiento Emprendimiento { get; set; } = null!;
     }
 }

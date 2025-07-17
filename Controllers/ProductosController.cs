@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ApiEmprendimiento.Context;
 using ApiEmprendimiento.Models;
+using ApiEmprendimiento.Dtos;
 
 namespace ApiEmprendimiento.Controllers
 {
@@ -75,13 +76,44 @@ namespace ApiEmprendimiento.Controllers
 
         // POST: api/Productos
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<Producto>> PostProducto(Producto producto)
+        [HttpPost("{emprendimientoId}")]
+        public async Task<ActionResult<Producto>> PostProducto(Guid emprendimientoId, [FromBody] ProductoCreateDto dto)
         {
+            // Validar modelo recibido
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            // Obtener el emprendimiento
+            var emprendimiento = await _context.Emprendimientos.FindAsync(emprendimientoId);
+            if (emprendimiento == null)
+                return NotFound("No se encontró el emprendimiento.");
+
+            // Obtener el inventario asociado al emprendimiento
+            var inventario = await _context.Inventarios
+                .FirstOrDefaultAsync(i => i.EmprendimientoId == emprendimientoId);
+
+            if (inventario == null)
+                return BadRequest("No se encontró un inventario asociado al emprendimiento.");
+
+            // Crear el producto
+            var producto = new Producto
+            {
+                Id = Guid.NewGuid(),
+                Nombre = dto.Nombre,
+                Descripcion = dto.Descripcion,
+                CostoFabricacion = dto.CostoFabricacion,
+                PrecioVenta = dto.PrecioVenta,
+                FechaCreacion = DateTimeOffset.UtcNow,
+                EmprendimientoId = emprendimiento.Id,
+                Emprendimiento = emprendimiento,
+                InventarioId = inventario.Id,
+                Inventario = inventario
+            };
+
             _context.Productos.Add(producto);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetProducto", new { id = producto.Id }, producto);
+            return CreatedAtAction(nameof(GetProducto), new { id = producto.Id }, producto);
         }
 
         // DELETE: api/Productos/5

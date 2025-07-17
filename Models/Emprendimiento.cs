@@ -20,6 +20,8 @@ namespace ApiEmprendimiento.Models
 
         [JsonIgnore] // Evitar referencia circular
         public ICollection<Producto> Productos { get; set; } = new List<Producto>();
+
+        public ICollection<Inventario> Inventarios { get; set; } = new List<Inventario>();
     }
 }
 

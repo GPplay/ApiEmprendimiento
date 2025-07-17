@@ -86,24 +86,34 @@ namespace ApiEmprendimiento.Controllers
         // POST: api/Emprendimientos
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<ActionResult<Emprendimiento>> PostEmprendimiento([FromBody] EmprendimientoCreateDto emprendimientoDto) // Usar el DTO
+        public async Task<ActionResult<Emprendimiento>> PostEmprendimiento([FromBody] EmprendimientoCreateDto emprendimientoDto)
         {
-            // Validación automática gracias a [ApiController] y DataAnnotations
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
 
-            // Mapear el DTO a la entidad Emprendimiento
+            var emprendimientoId = Guid.NewGuid();
+
             var emprendimiento = new Emprendimiento
             {
-                Id = Guid.NewGuid(), // Generar nuevo ID
+                Id = emprendimientoId,
                 Nombre = emprendimientoDto.Nombre,
                 Descripcion = emprendimientoDto.Descripcion
-                // Dejar el resto de propiedades con valores por defecto
+            };
+
+            // Crear inventario automáticamente para el nuevo emprendimiento
+            var inventario = new Inventario
+            {
+                Id = Guid.NewGuid(),
+                EmprendimientoId = emprendimientoId,
+                Cantidad = 0,
+                FechaActualizacion = DateTimeOffset.UtcNow
             };
 
             _context.Emprendimientos.Add(emprendimiento);
+            _context.Inventarios.Add(inventario);
+
             await _context.SaveChangesAsync();
 
             return CreatedAtAction("GetEmprendimiento", new { id = emprendimiento.Id }, emprendimiento);

@@ -23,8 +23,11 @@ namespace ApiEmprendimiento.Context
 
             // Configuración de precisión para campos decimales
             modelBuilder.Entity<Producto>()
-                .Property(p => p.Precio)
+                .Property(p => p.PrecioVenta)
                 .HasPrecision(18, 2); // decimal(18,2)
+            modelBuilder.Entity<Producto>()
+                .Property(p => p.CostoFabricacion)
+                .HasPrecision(18, 2);
 
             modelBuilder.Entity<Inventario>()
                 .Property(i => i.Cantidad)
@@ -39,6 +42,12 @@ namespace ApiEmprendimiento.Context
                 .HasPrecision(18, 2); // decimal(18,2)
 
             // Relaciones y eliminación en cascada
+            modelBuilder.Entity<Inventario>()
+                .HasOne(i => i.Emprendimiento)
+                .WithMany(e => e.Inventarios)
+                .HasForeignKey(i => i.EmprendimientoId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             modelBuilder.Entity<Usuario>()
                 .HasOne(u => u.Emprendimiento)
                 .WithMany(e => e.Usuarios)
