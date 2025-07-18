@@ -38,7 +38,7 @@ namespace ApiEmprendimiento.Context
                 .HasPrecision(18, 2); // decimal(18,2)
 
             modelBuilder.Entity<Venta>()
-                .Property(v => v.Total)
+                .Property(v => v.cantidad)
                 .HasPrecision(18, 2); // decimal(18,2)
 
             // Relaciones y eliminación en cascada

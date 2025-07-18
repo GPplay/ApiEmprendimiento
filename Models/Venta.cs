@@ -18,7 +18,7 @@ namespace ApiEmprendimiento.Models
 
         [Required]
         [Range(0, 99999999.99)]
-        public decimal Total { get; set; }
+        public decimal cantidad { get; set; }
 
         // Relación
         public ICollection<DetalleVenta> DetallesVenta { get; set; } = new List<DetalleVenta>();
