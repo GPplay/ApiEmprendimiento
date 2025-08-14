@@ -1,17 +1,21 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using ApiEmprendimiento.Context;
+using ApiEmprendimiento.Dtos;
+using ApiEmprendimiento.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using ApiEmprendimiento.Context;
-using ApiEmprendimiento.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace ApiEmprendimiento.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize] // Asegura que solo usuarios autenticados accedan
     public class DetalleVentasController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -21,36 +25,28 @@ namespace ApiEmprendimiento.Controllers
             _context = context;
         }
 
-        // GET: api/DetalleVentas
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DetalleVenta>>> GetDetallesVenta()
         {
             return await _context.DetallesVenta.ToListAsync();
         }
 
-        // GET: api/DetalleVentas/5
         [HttpGet("{id}")]
         public async Task<ActionResult<DetalleVenta>> GetDetalleVenta(Guid id)
         {
             var detalleVenta = await _context.DetallesVenta.FindAsync(id);
 
             if (detalleVenta == null)
-            {
                 return NotFound();
-            }
 
             return detalleVenta;
         }
 
-        // PUT: api/DetalleVentas/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
         public async Task<IActionResult> PutDetalleVenta(Guid id, DetalleVenta detalleVenta)
         {
             if (id != detalleVenta.Id)
-            {
                 return BadRequest();
-            }
 
             _context.Entry(detalleVenta).State = EntityState.Modified;
 
@@ -61,38 +57,52 @@ namespace ApiEmprendimiento.Controllers
             catch (DbUpdateConcurrencyException)
             {
                 if (!DetalleVentaExists(id))
-                {
                     return NotFound();
-                }
                 else
-                {
                     throw;
-                }
             }
 
             return NoContent();
         }
 
-        // POST: api/DetalleVentas
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<ActionResult<DetalleVenta>> PostDetalleVenta(DetalleVenta detalleVenta)
+        public async Task<ActionResult<DetalleVenta>> PostDetalleVenta(DetallesVetnasCreateDTO dto)
         {
+            // Obtener el usuario autenticado desde los claims del JWT
+            var usuarioIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (usuarioIdClaim == null)
+                return Unauthorized("No se pudo identificar al usuario.");
+
+            var usuarioId = Guid.Parse(usuarioIdClaim);
+
+            // Buscar el usuario para obtener su emprendimiento
+            var usuario = await _context.Usuarios.FindAsync(usuarioId);
+            if (usuario == null)
+                return NotFound("Usuario no encontrado");
+
+            // Crear el registro de DetalleVenta
+            var detalleVenta = new DetalleVenta
+            {
+                UsuarioId = usuario.Id,
+                EmprendimientoId = usuario.EmprendimientoId,
+                ProductoId = dto.ProductoId,
+                Cantidad = dto.Cantidad,
+                Precio = dto.Precio,
+                FechaVenta = DateTimeOffset.UtcNow
+            };
+
             _context.DetallesVenta.Add(detalleVenta);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetDetalleVenta", new { id = detalleVenta.Id }, detalleVenta);
+            return CreatedAtAction(nameof(GetDetalleVenta), new { id = detalleVenta.Id }, detalleVenta);
         }
 
-        // DELETE: api/DetalleVentas/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteDetalleVenta(Guid id)
         {
             var detalleVenta = await _context.DetallesVenta.FindAsync(id);
             if (detalleVenta == null)
-            {
                 return NotFound();
-            }
 
             _context.DetallesVenta.Remove(detalleVenta);
             await _context.SaveChangesAsync();

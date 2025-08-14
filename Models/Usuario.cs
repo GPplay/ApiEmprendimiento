@@ -28,7 +28,6 @@ namespace ApiEmprendimiento.Models
         [ForeignKey(nameof(EmprendimientoId))]
         public required Emprendimiento Emprendimiento { get; set; }
 
-        // Relación opcional con Ventas  
-        public ICollection<Venta> Ventas { get; set; } = new List<Venta>();
+
     }
 }

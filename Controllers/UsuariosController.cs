@@ -27,16 +27,16 @@ namespace ApiEmprendimiento.Controllers
 
         // GET: api/Usuarios
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Usuario>>> Getusuarios()
+        public async Task<ActionResult<IEnumerable<Usuario>>> GetUsuarios()
         {
-            return await _context.usuarios.ToListAsync();
+            return await _context.Usuarios.ToListAsync();
         }
 
         // GET: api/Usuarios/5
         [HttpGet("{id}")]
         public async Task<ActionResult<Usuario>> GetUsuario(Guid id)
         {
-            var usuario = await _context.usuarios.FindAsync(id);
+            var usuario = await _context.Usuarios.FindAsync(id);
 
             if (usuario == null)
             {
@@ -89,7 +89,7 @@ namespace ApiEmprendimiento.Controllers
                 return BadRequest(ModelState);
 
             // Validar email único
-            if (await _context.usuarios.AnyAsync(u => u.Email == usuarioDto.Email))
+            if (await _context.Usuarios.AnyAsync(u => u.Email == usuarioDto.Email))
                 return BadRequest("El email ya está registrado");
 
             Emprendimiento? emprendimiento = null;
@@ -164,7 +164,7 @@ namespace ApiEmprendimiento.Controllers
                 Emprendimiento = emprendimiento
             };
 
-            _context.usuarios.Add(nuevoUsuario);
+            _context.Usuarios.Add(nuevoUsuario);
             await _context.SaveChangesAsync();
 
             return CreatedAtAction(nameof(GetUsuario), new { id = nuevoUsuario.Id }, new
@@ -181,13 +181,13 @@ namespace ApiEmprendimiento.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteUsuario(Guid id)
         {
-            var usuario = await _context.usuarios.FindAsync(id);
+            var usuario = await _context.Usuarios.FindAsync(id);
             if (usuario == null)
             {
                 return NotFound();
             }
 
-            _context.usuarios.Remove(usuario);
+            _context.Usuarios.Remove(usuario);
             await _context.SaveChangesAsync();
 
             return NoContent();
@@ -195,7 +195,7 @@ namespace ApiEmprendimiento.Controllers
 
         private bool UsuarioExists(Guid id)
         {
-            return _context.usuarios.Any(e => e.Id == id);
+            return _context.Usuarios.Any(e => e.Id == id);
         }
     }
 }
