@@ -1,10 +1,10 @@
 ﻿using ApiEmprendimiento.Context;
-using Microsoft.EntityFrameworkCore;
-using System.Text.Json.Serialization;
-
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Text;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,8 +12,13 @@ var builder = WebApplication.CreateBuilder(args);
 //  Configuración de JWT
 // -------------------------
 
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "clave_super_secreta";
-var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ApiEmprendimiento";
+var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+
+if (string.IsNullOrEmpty(jwtKey) || string.IsNullOrEmpty(jwtIssuer))
+{
+    throw new InvalidOperationException("La configuración JWT no está correctamente definida en appsettings.json");
+}
 
 // -------------------------
 //  Conexión a la base de datos
@@ -68,7 +73,36 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // -------------------------
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "ApiEmprendimiento", Version = "v1" });
+
+    // Configuración de autenticación JWT en Swagger
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Ingrese 'Bearer' seguido de su token JWT.\n\nEjemplo: \"Bearer eyJhbGciOiJIUzI1NiIs...\""
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] {}
+        }
+    });
+});
 
 // -------------------------
 // Construcción de la app
