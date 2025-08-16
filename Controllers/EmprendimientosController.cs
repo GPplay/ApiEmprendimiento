@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using ApiEmprendimiento.Context;
 using ApiEmprendimiento.Models;
 using ApiEmprendimiento.Dtos;
+using ApiEmprendimiento.Services;
 
 namespace ApiEmprendimiento.Controllers
 {
@@ -16,10 +17,12 @@ namespace ApiEmprendimiento.Controllers
     public class EmprendimientosController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly EmprendimientoService _emprendimientoService;
 
-        public EmprendimientosController(AppDbContext context)
+        public EmprendimientosController(AppDbContext context, EmprendimientoService emprendimientoService)
         {
             _context = context;
+            _emprendimientoService = emprendimientoService;
         }
 
         // GET: api/Emprendimientos
@@ -27,15 +30,15 @@ namespace ApiEmprendimiento.Controllers
         public async Task<ActionResult<IEnumerable<object>>> GetEmprendimientos()
         {
             return await _context.Emprendimientos
-         .Include(e => e.Usuarios) // Cargar usuarios relacionados
-         .Select(e => new
-         {
-             e.Id,
-             Nombre = e.Nombre, // Corregir nombre de propiedad
-             e.Descripcion,
-             Usuarios = e.Usuarios.Select(u => u.Nombre).ToList() // Solo nombres
-         })
-         .ToListAsync();
+                .Include(e => e.Usuarios) // Cargar usuarios relacionados
+                .Select(e => new
+                {
+                    e.Id,
+                    e.Nombre,
+                    e.Descripcion,
+                    Usuarios = e.Usuarios.Select(u => u.Nombre).ToList()
+                })
+                .ToListAsync();
         }
 
         // GET: api/Emprendimientos/5
@@ -45,22 +48,17 @@ namespace ApiEmprendimiento.Controllers
             var emprendimiento = await _context.Emprendimientos.FindAsync(id);
 
             if (emprendimiento == null)
-            {
                 return NotFound();
-            }
 
             return emprendimiento;
         }
 
         // PUT: api/Emprendimientos/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
         public async Task<IActionResult> PutEmprendimiento(Guid id, Emprendimiento emprendimiento)
         {
             if (id != emprendimiento.Id)
-            {
                 return BadRequest();
-            }
 
             _context.Entry(emprendimiento).State = EntityState.Modified;
 
@@ -71,52 +69,27 @@ namespace ApiEmprendimiento.Controllers
             catch (DbUpdateConcurrencyException)
             {
                 if (!EmprendimientoExists(id))
-                {
                     return NotFound();
-                }
                 else
-                {
                     throw;
-                }
             }
 
             return NoContent();
         }
 
         // POST: api/Emprendimientos
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
         public async Task<ActionResult<Emprendimiento>> PostEmprendimiento([FromBody] EmprendimientoCreateDto emprendimientoDto)
         {
             if (!ModelState.IsValid)
-            {
                 return BadRequest(ModelState);
-            }
 
-            var emprendimientoId = Guid.NewGuid();
+            var emprendimiento = await _emprendimientoService.CrearEmprendimientoConInventario(
+                emprendimientoDto.Nombre,
+                emprendimientoDto.Descripcion
+            );
 
-            var emprendimiento = new Emprendimiento
-            {
-                Id = emprendimientoId,
-                Nombre = emprendimientoDto.Nombre,
-                Descripcion = emprendimientoDto.Descripcion
-            };
-
-            // Crear inventario automáticamente para el nuevo emprendimiento
-            var inventario = new Inventario
-            {
-                Id = Guid.NewGuid(),
-                EmprendimientoId = emprendimientoId,
-                Cantidad = 0,
-                FechaActualizacion = DateTimeOffset.UtcNow
-            };
-
-            _context.Emprendimientos.Add(emprendimiento);
-            _context.Inventarios.Add(inventario);
-
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetEmprendimiento", new { id = emprendimiento.Id }, emprendimiento);
+            return CreatedAtAction(nameof(GetEmprendimiento), new { id = emprendimiento.Id }, emprendimiento);
         }
 
         // DELETE: api/Emprendimientos/5
@@ -125,9 +98,7 @@ namespace ApiEmprendimiento.Controllers
         {
             var emprendimiento = await _context.Emprendimientos.FindAsync(id);
             if (emprendimiento == null)
-            {
                 return NotFound();
-            }
 
             _context.Emprendimientos.Remove(emprendimiento);
             await _context.SaveChangesAsync();
