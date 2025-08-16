@@ -15,12 +15,14 @@ namespace ApiEmprendimiento.Models
         [Required]
         public DateTimeOffset FechaActualizacion { get; set; } = DateTimeOffset.UtcNow;
 
-        // Relación uno a muchos: un inventario puede tener muchos productos
-        public ICollection<Producto> Productos { get; set; } = new List<Producto>();
-
+        // Relación uno a uno: un inventario pertenece a un emprendimiento
+        [Required]
         public Guid EmprendimientoId { get; set; }
 
         [ForeignKey(nameof(EmprendimientoId))]
         public Emprendimiento Emprendimiento { get; set; } = null!;
+
+        // Relación con productos
+        public ICollection<Producto> Productos { get; set; } = new List<Producto>();
     }
 }

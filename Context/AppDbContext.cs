@@ -39,37 +39,37 @@ namespace ApiEmprendimiento.Context
 
             // Relación Usuario -> DetalleVenta (uno a muchos)
             modelBuilder.Entity<Usuario>()
-                .HasMany<DetalleVenta>() // no tienes lista en Usuario, así que es navegación sin inversa
+                .HasMany<DetalleVenta>()
                 .WithOne(dv => dv.Usuario)
                 .HasForeignKey(dv => dv.UsuarioId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Relación Inventario -> Producto
+            // Relación Inventario -> Producto (uno a muchos)
             modelBuilder.Entity<Producto>()
                 .HasOne(p => p.Inventario)
                 .WithMany(i => i.Productos)
                 .HasForeignKey(p => p.InventarioId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Relación Usuario -> Emprendimiento
+            // Relación Usuario -> Emprendimiento (uno a muchos)
             modelBuilder.Entity<Usuario>()
                 .HasOne(u => u.Emprendimiento)
                 .WithMany(e => e.Usuarios)
                 .HasForeignKey(u => u.EmprendimientoId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Relación Producto -> Emprendimiento
+            // Relación Producto -> Emprendimiento (uno a muchos)
             modelBuilder.Entity<Producto>()
                 .HasOne(p => p.Emprendimiento)
                 .WithMany(e => e.Productos)
                 .HasForeignKey(p => p.EmprendimientoId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Relación Inventario -> Emprendimiento
-            modelBuilder.Entity<Inventario>()
-                .HasOne(i => i.Emprendimiento)
-                .WithMany(e => e.Inventarios)
-                .HasForeignKey(i => i.EmprendimientoId)
+            // Relación Emprendimiento <-> Inventario (uno a uno)
+            modelBuilder.Entity<Emprendimiento>()
+                .HasOne(e => e.Inventario)
+                .WithOne(i => i.Emprendimiento)
+                .HasForeignKey<Inventario>(i => i.EmprendimientoId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }

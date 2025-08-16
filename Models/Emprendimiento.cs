@@ -15,13 +15,13 @@ namespace ApiEmprendimiento.Models
         public string? Descripcion { get; set; }
 
         // Relaciones
-        [JsonIgnore] // Evitar referencia circular
+        [JsonIgnore]
         public ICollection<Usuario> Usuarios { get; set; } = new List<Usuario>();
 
-        [JsonIgnore] // Evitar referencia circular
+        [JsonIgnore]
         public ICollection<Producto> Productos { get; set; } = new List<Producto>();
 
-        public ICollection<Inventario> Inventarios { get; set; } = new List<Inventario>();
+        // Relación uno a uno con Inventario
+        public Inventario Inventario { get; set; } = null!;
     }
 }
-
