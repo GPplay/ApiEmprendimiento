@@ -12,6 +12,7 @@ namespace ApiEmprendimiento.Context
         public DbSet<Emprendimiento> Emprendimientos { get; set; }
         public DbSet<Inventario> Inventarios { get; set; }
         public DbSet<DetalleVenta> DetallesVenta { get; set; }
+        public DbSet<InventarioProducto> InventarioProductos { get; set; } // Nueva tabla de unión
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -44,12 +45,10 @@ namespace ApiEmprendimiento.Context
                 .HasForeignKey(dv => dv.UsuarioId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Relación Inventario -> Producto (uno a muchos)
-            modelBuilder.Entity<Producto>()
-                .HasOne(p => p.Inventario)
-                .WithMany(i => i.Productos)
-                .HasForeignKey(p => p.InventarioId)
-                .OnDelete(DeleteBehavior.Cascade);
+            // ***************************************************************
+            // Se elimina la relación directa Inventario -> Producto (uno a muchos)
+            // Ya no es necesaria porque ahora se maneja a través de InventarioProducto
+            // ***************************************************************
 
             // Relación Usuario -> Emprendimiento (uno a muchos)
             modelBuilder.Entity<Usuario>()
@@ -71,6 +70,23 @@ namespace ApiEmprendimiento.Context
                 .WithOne(i => i.Emprendimiento)
                 .HasForeignKey<Inventario>(i => i.EmprendimientoId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Configuración de la relación Muchos a Muchos entre Inventario y Producto
+            // a través de la tabla de unión InventarioProducto
+            modelBuilder.Entity<InventarioProducto>()
+                .HasKey(ip => ip.Id); // Usar la propiedad Id como clave primaria para la tabla de unión
+
+            modelBuilder.Entity<InventarioProducto>()
+                .HasOne(ip => ip.Inventario)
+                .WithMany(i => i.InventarioProductos)
+                .HasForeignKey(ip => ip.InventarioId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<InventarioProducto>()
+                .HasOne(ip => ip.Producto)
+                .WithMany(p => p.InventarioProductos)
+                .HasForeignKey(ip => ip.ProductoId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

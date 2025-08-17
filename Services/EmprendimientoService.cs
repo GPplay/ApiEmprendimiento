@@ -29,7 +29,6 @@ namespace ApiEmprendimiento.Services
                 Id = Guid.NewGuid(),
                 EmprendimientoId = emprendimiento.Id,
                 Emprendimiento = emprendimiento,
-                Cantidad = 0,
                 FechaActualizacion = DateTimeOffset.UtcNow
             };
 

@@ -44,7 +44,6 @@ namespace ApiEmprendimiento.Controllers
                 .Select(i => new
                 {
                     i.Id,
-                    i.Cantidad,
                     i.FechaActualizacion
                 })
                 .ToListAsync();
@@ -74,7 +73,6 @@ namespace ApiEmprendimiento.Controllers
             return new
             {
                 inventario.Id,
-                inventario.Cantidad,
                 inventario.FechaActualizacion
             };
         }
@@ -104,7 +102,6 @@ namespace ApiEmprendimiento.Controllers
             }
 
             // Actualizamos solo los campos permitidos
-            inventarioExistente.Cantidad = inventario.Cantidad;
             inventarioExistente.FechaActualizacion = DateTimeOffset.UtcNow;
 
             try

@@ -69,7 +69,6 @@ namespace ApiEmprendimiento.Controllers
             _logger.LogInformation("Obteniendo producto con ID: {ProductoId}", id);
             var producto = await _context.Productos
                 .Include(p => p.Emprendimiento)
-                .Include(p => p.Inventario)
                 .FirstOrDefaultAsync(p => p.Id == id);
 
             if (producto == null)
@@ -194,7 +193,6 @@ namespace ApiEmprendimiento.Controllers
                     Id = Guid.NewGuid(),
                     EmprendimientoId = parsedEmprendimientoId,
                     Emprendimiento = emprendimiento,
-                    Cantidad = 0,
                     FechaActualizacion = DateTimeOffset.UtcNow
                 };
                 _context.Inventarios.Add(inventario);
@@ -212,8 +210,6 @@ namespace ApiEmprendimiento.Controllers
                 FechaCreacion = DateTimeOffset.UtcNow,
                 EmprendimientoId = parsedEmprendimientoId,
                 Emprendimiento = emprendimiento,
-                InventarioId = inventario.Id,
-                Inventario = inventario
             };
 
             try

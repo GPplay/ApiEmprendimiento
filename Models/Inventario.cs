@@ -1,5 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ApiEmprendimiento.Models
 {
@@ -8,12 +10,10 @@ namespace ApiEmprendimiento.Models
         [Key]
         public Guid Id { get; set; } = Guid.NewGuid();
 
-        [Required]
-        [Range(0, int.MaxValue)]
-        public int Cantidad { get; set; }
+        // Se elimina el campo 'Cantidad' de aquí, ya que ahora se gestionará por producto en InventarioProducto.
 
         [Required]
-        public DateTimeOffset FechaActualizacion { get; set; } = DateTimeOffset.UtcNow;
+        public DateTimeOffset FechaActualizacion { get; set; } = DateTimeOffset.UtcNow; // Mantener para el inventario general
 
         // Relación uno a uno: un inventario pertenece a un emprendimiento
         [Required]
@@ -22,7 +22,8 @@ namespace ApiEmprendimiento.Models
         [ForeignKey(nameof(EmprendimientoId))]
         public Emprendimiento Emprendimiento { get; set; } = null!;
 
-        // Relación con productos
-        public ICollection<Producto> Productos { get; set; } = new List<Producto>();
+        // Nueva relación Muchos a Muchos con productos a través de la tabla InventarioProducto
+        // Esta colección contendrá las entradas de los productos específicos en este inventario.
+        public ICollection<InventarioProducto> InventarioProductos { get; set; } = new List<InventarioProducto>();
     }
 }

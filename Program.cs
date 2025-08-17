@@ -1,5 +1,5 @@
 ﻿using ApiEmprendimiento.Context;
-using ApiEmprendimiento.Services;
+using ApiEmprendimiento.Services; // Mantener si usas otros servicios de Services
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -14,6 +14,9 @@ var builder = WebApplication.CreateBuilder(args);
 // -------------------------
 
 builder.Services.AddScoped<EmprendimientoService>();
+// Se remueve el registro de DbContext aquí, ya que AddDbContext ya lo registra.
+// Se remueve el registro de IDropDatabaseService y DropDatabaseService,
+// ya que la eliminación automática de la base de datos no es el comportamiento deseado.
 
 // -------------------------
 //  Configuración de JWT
@@ -132,6 +135,14 @@ builder.Services.AddSwaggerGen(c =>
 // -------------------------
 
 var app = builder.Build();
+
+// Se remueve el bloque de código que inyectaba y usaba DropDatabaseService
+// using (var scope = app.Services.CreateScope())
+// {
+//     var dropDatabaseService = scope.ServiceProvider.GetRequiredService<IDropDatabaseService>();
+//     var databaseName = "EmprendimientosDB";
+//     await dropDatabaseService.DropDatabaseAsync(databaseName);
+// }
 
 if (app.Environment.IsDevelopment())
 {
