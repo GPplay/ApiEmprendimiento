@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace ApiEmprendimiento.Controllers
@@ -24,98 +25,101 @@ namespace ApiEmprendimiento.Controllers
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
+        // GET: api/Inventarios
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Inventario>>> GetInventarios()
+        public async Task<ActionResult<IEnumerable<object>>> GetInventarios()
         {
-            _logger.LogInformation("Obteniendo lista de inventarios.");
-            return await _context.Inventarios
-                .Include(i => i.Emprendimiento)
+            // Obtener claim de EmprendimientoId
+            var emprendimientoIdClaim = User.FindFirst("emprendimientoId")?.Value;
+            if (string.IsNullOrEmpty(emprendimientoIdClaim) || !Guid.TryParse(emprendimientoIdClaim, out var parsedEmprendimientoId))
+            {
+                _logger.LogWarning("El token no contiene un EmprendimientoId válido.");
+                return Unauthorized(new { message = "No se encontró un EmprendimientoId válido en el token." });
+            }
+
+            _logger.LogInformation("Obteniendo inventarios para EmprendimientoId: {EmprendimientoId}", parsedEmprendimientoId);
+
+            var inventarios = await _context.Inventarios
+                .Where(i => i.EmprendimientoId == parsedEmprendimientoId)
+                .Select(i => new
+                {
+                    i.Id,
+                    i.Cantidad,
+                    i.FechaActualizacion
+                })
                 .ToListAsync();
+
+            return inventarios;
         }
 
+        // GET: api/Inventarios/{id}
         [HttpGet("{id}")]
-        public async Task<ActionResult<Inventario>> GetInventario(Guid id)
+        public async Task<ActionResult<object>> GetInventario(Guid id)
         {
+            var emprendimientoIdClaim = User.FindFirst("emprendimientoId")?.Value;
+            if (string.IsNullOrEmpty(emprendimientoIdClaim) || !Guid.TryParse(emprendimientoIdClaim, out var parsedEmprendimientoId))
+            {
+                return Unauthorized(new { message = "No se encontró un EmprendimientoId válido en el token." });
+            }
+
             var inventario = await _context.Inventarios
-                .Include(i => i.Emprendimiento)
-                .FirstOrDefaultAsync(i => i.Id == id);
+                .FirstOrDefaultAsync(i => i.Id == id && i.EmprendimientoId == parsedEmprendimientoId);
 
             if (inventario == null)
             {
-                _logger.LogWarning("Inventario con ID: {InventarioId} no encontrado.", id);
-                return NotFound(new { message = $"Inventario con ID {id} no encontrado." });
+                _logger.LogWarning("Inventario con ID: {InventarioId} no encontrado para EmprendimientoId {EmprendimientoId}.", id, parsedEmprendimientoId);
+                return NotFound(new { message = $"Inventario con ID {id} no encontrado o no pertenece a tu emprendimiento." });
             }
 
-            return inventario;
+            return new
+            {
+                inventario.Id,
+                inventario.Cantidad,
+                inventario.FechaActualizacion
+            };
         }
 
+        // PUT: api/Inventarios/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutInventario(Guid id, Inventario inventario)
+        public async Task<IActionResult> PutInventario(Guid id, [FromBody] Inventario inventario)
         {
+            var emprendimientoIdClaim = User.FindFirst("emprendimientoId")?.Value;
+            if (string.IsNullOrEmpty(emprendimientoIdClaim) || !Guid.TryParse(emprendimientoIdClaim, out var parsedEmprendimientoId))
+            {
+                return Unauthorized(new { message = "No se encontró un EmprendimientoId válido en el token." });
+            }
+
             if (id != inventario.Id)
             {
                 _logger.LogWarning("El ID proporcionado ({Id}) no coincide con el ID del inventario ({InventarioId}).", id, inventario.Id);
                 return BadRequest(new { message = "El ID del inventario no coincide con el proporcionado." });
             }
 
-            _context.Entry(inventario).State = EntityState.Modified;
+            var inventarioExistente = await _context.Inventarios
+                .FirstOrDefaultAsync(i => i.Id == id && i.EmprendimientoId == parsedEmprendimientoId);
+
+            if (inventarioExistente == null)
+            {
+                return NotFound(new { message = $"Inventario con ID {id} no encontrado o no pertenece a tu emprendimiento." });
+            }
+
+            // Actualizamos solo los campos permitidos
+            inventarioExistente.Cantidad = inventario.Cantidad;
+            inventarioExistente.FechaActualizacion = DateTimeOffset.UtcNow;
 
             try
             {
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Inventario con ID: {InventarioId} actualizado correctamente.", id);
+                _logger.LogInformation("Inventario con ID: {InventarioId} actualizado correctamente para EmprendimientoId {EmprendimientoId}.", id, parsedEmprendimientoId);
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!InventarioExists(id))
-                {
-                    _logger.LogWarning("Inventario con ID: {InventarioId} no encontrado durante la actualización.", id);
-                    return NotFound(new { message = $"Inventario con ID {id} no encontrado." });
-                }
-                else
-                {
-                    _logger.LogError("Error de concurrencia al actualizar inventario con ID: {InventarioId}.", id);
-                    throw;
-                }
+                return Conflict(new { message = "Conflicto de concurrencia al actualizar el inventario." });
             }
             catch (DbUpdateException ex)
             {
                 _logger.LogError(ex, "Error al actualizar inventario con ID: {InventarioId}.", id);
                 return BadRequest(new { message = "Error al actualizar el inventario. Verifica las claves foráneas." });
-            }
-
-            return NoContent();
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteInventario(Guid id)
-        {
-            var inventario = await _context.Inventarios
-                .Include(i => i.Productos)
-                .FirstOrDefaultAsync(i => i.Id == id);
-
-            if (inventario == null)
-            {
-                _logger.LogWarning("Inventario con ID: {InventarioId} no encontrado.", id);
-                return NotFound(new { message = $"Inventario con ID {id} no encontrado." });
-            }
-
-            if (inventario.Productos.Any())
-            {
-                _logger.LogWarning("No se puede eliminar el inventario con ID: {InventarioId} porque tiene productos asociados.", id);
-                return BadRequest(new { message = "No se puede eliminar el inventario porque tiene productos asociados." });
-            }
-
-            try
-            {
-                _context.Inventarios.Remove(inventario);
-                await _context.SaveChangesAsync();
-                _logger.LogInformation("Inventario con ID: {InventarioId} eliminado correctamente.", id);
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "Error al eliminar inventario con ID: {InventarioId}.", id);
-                return BadRequest(new { message = "Error al eliminar el inventario debido a restricciones de claves foráneas." });
             }
 
             return NoContent();
