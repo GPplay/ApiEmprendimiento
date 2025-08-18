@@ -1,9 +1,13 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace ApiEmprendimiento.Dtos
 {
-    public class ProductoCreateDto
+    public class ProductoUpdateDto
     {
+        [Required]
+        public Guid Id { get; set; } // Necesario para identificar el producto a actualizar
+
         [Required]
         [MaxLength(255)]
         public string Nombre { get; set; } = string.Empty;
@@ -17,9 +21,5 @@ namespace ApiEmprendimiento.Dtos
         [Required]
         [Range(0, 99999999.99)]
         public decimal PrecioVenta { get; set; }
-
-        [Required]
-        [Range(0, int.MaxValue)]
-        public int CantidadInicial { get; set; } // Esta propiedad es clave
     }
 }

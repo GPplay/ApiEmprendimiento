@@ -2,10 +2,9 @@
 using ApiEmprendimiento.Dtos;
 using ApiEmprendimiento.Models;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging; // Agregado para logging
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,10 +14,11 @@ namespace ApiEmprendimiento.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize] // Protege todo el controlador, requiriendo autenticación JWT para todas las acciones
     public class ProductosController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly ILogger<ProductosController> _logger; // Agregado para logging
+        private readonly ILogger<ProductosController> _logger;
 
         public ProductosController(AppDbContext context, ILogger<ProductosController> logger)
         {
@@ -26,129 +26,172 @@ namespace ApiEmprendimiento.Controllers
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        // GET: api/Productos
-        [Authorize]
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<object>>> GetProducto()
+        // Helper para extraer el EmprendimientoId del token JWT del usuario
+        private ActionResult<Guid> GetEmprendimientoIdFromToken()
         {
-            _logger.LogInformation("Obteniendo lista de productos del usuario logueado.");
-
-            // Extraer el claim de EmprendimientoId del JWT
             var emprendimientoIdClaim = User.FindFirst("emprendimientoId")?.Value;
             if (string.IsNullOrEmpty(emprendimientoIdClaim))
             {
                 _logger.LogWarning("No se encontró el claim 'emprendimientoId' en el token JWT.");
-                return Unauthorized(new { message = "No se encontró el EmprendimientoId en el token." });
+                return Unauthorized(new { message = "No se encontró el EmprendimientoId en el token de autenticación." });
             }
 
             if (!Guid.TryParse(emprendimientoIdClaim, out var parsedEmprendimientoId))
             {
                 _logger.LogWarning("El EmprendimientoId '{EmprendimientoId}' en el token es inválido.", emprendimientoIdClaim);
-                return Unauthorized(new { message = "EmprendimientoId inválido en el token." });
+                return Unauthorized(new { message = "El EmprendimientoId proporcionado en el token es inválido." });
             }
+            return parsedEmprendimientoId;
+        }
 
-            // Consultar solo productos de ese emprendimiento
-            var productos = await _context.Productos
-                .Where(p => p.EmprendimientoId == parsedEmprendimientoId)
-                .Select(p => new
+        // GET: api/Productos
+        // Obtiene la lista de productos de un emprendimiento específico, incluyendo su cantidad en inventario.
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<object>>> GetProductosDelEmprendimiento()
+        {
+            var emprendimientoIdResult = GetEmprendimientoIdFromToken();
+            if (emprendimientoIdResult.Result is UnauthorizedResult)
+            {
+                return emprendimientoIdResult.Result;
+            }
+            var parsedEmprendimientoId = emprendimientoIdResult.Value;
+
+            _logger.LogInformation("Obteniendo lista de productos del emprendimiento con ID: {EmprendimientoId}", parsedEmprendimientoId);
+
+            var productosEnInventario = await _context.InventarioProductos
+                .Include(ip => ip.Producto)
+                .Include(ip => ip.Inventario)
+                .Where(ip => ip.Inventario.EmprendimientoId == parsedEmprendimientoId)
+                .Select(ip => new
                 {
-                    p.Nombre,
-                    p.Descripcion,
-                    p.CostoFabricacion,
-                    p.PrecioVenta
+                    ip.Producto.Id,
+                    ip.Producto.Nombre,
+                    ip.Producto.Descripcion,
+                    ip.Producto.CostoFabricacion,
+                    ip.Producto.PrecioVenta,
+                    ip.Cantidad,
+                    ip.FechaActualizacion
                 })
                 .ToListAsync();
 
-            return productos;
+            if (!productosEnInventario.Any())
+            {
+                _logger.LogInformation("No se encontraron productos en el inventario para el EmprendimientoId: {EmprendimientoId}.", parsedEmprendimientoId);
+                return NotFound(new { message = "No se encontraron productos en el inventario para tu emprendimiento." });
+            }
+
+            return Ok(productosEnInventario);
         }
 
         // GET: api/Productos/5
+        // Obtiene los detalles de un producto específico, incluyendo su cantidad en inventario.
         [HttpGet("{id}")]
-        public async Task<ActionResult<Producto>> GetProducto(Guid id)
+        public async Task<ActionResult<object>> GetProductoPorId(Guid id)
         {
-            _logger.LogInformation("Obteniendo producto con ID: {ProductoId}", id);
-            var producto = await _context.Productos
-                .Include(p => p.Emprendimiento)
-                .FirstOrDefaultAsync(p => p.Id == id);
-
-            if (producto == null)
+            var emprendimientoIdResult = GetEmprendimientoIdFromToken();
+            if (emprendimientoIdResult.Result is UnauthorizedResult)
             {
-                _logger.LogWarning("Producto con ID: {ProductoId} no encontrado.", id);
-                return NotFound(new { message = $"Producto con ID {id} no encontrado." });
+                return emprendimientoIdResult.Result;
             }
+            var parsedEmprendimientoId = emprendimientoIdResult.Value;
 
-            return producto;
-        }
+            _logger.LogInformation("Obteniendo producto con ID: {ProductoId} para EmprendimientoId: {EmprendimientoId}", id, parsedEmprendimientoId);
 
-        // PUT: api/Productos/5
-        [Authorize]
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutProducto(Guid id, [FromBody] Producto producto)
-        {
-            if (!ModelState.IsValid)
-            {
-                _logger.LogWarning("Datos inválidos en la solicitud de actualización de producto.");
-                return BadRequest(ModelState);
-            }
+            var productoEnInventario = await _context.InventarioProductos
+                .Include(ip => ip.Producto)
+                .Include(ip => ip.Inventario)
+                .Where(ip => ip.ProductoId == id && ip.Inventario.EmprendimientoId == parsedEmprendimientoId)
+                .Select(ip => new
+                {
+                    ip.Producto.Id,
+                    ip.Producto.Nombre,
+                    ip.Producto.Descripcion,
+                    ip.Producto.CostoFabricacion,
+                    ip.Producto.PrecioVenta,
+                    ip.Cantidad,
+                    ip.FechaActualizacion
+                })
+                .FirstOrDefaultAsync();
 
-            // Extraer el EmprendimientoId del token JWT
-            var emprendimientoIdClaim = User.FindFirst("emprendimientoId")?.Value;
-            if (string.IsNullOrEmpty(emprendimientoIdClaim))
-            {
-                _logger.LogWarning("No se encontró el claim 'emprendimientoId' en el token JWT.");
-                return Unauthorized(new { message = "No se encontró el EmprendimientoId en el token." });
-            }
-
-            if (!Guid.TryParse(emprendimientoIdClaim, out var parsedEmprendimientoId))
-            {
-                _logger.LogWarning("El EmprendimientoId '{EmprendimientoId}' en el token es inválido.", emprendimientoIdClaim);
-                return Unauthorized(new { message = "EmprendimientoId inválido en el token." });
-            }
-
-            if (id != producto.Id)
-            {
-                _logger.LogWarning("El ID proporcionado ({Id}) no coincide con el ID del producto ({ProductoId}).", id, producto.Id);
-                return BadRequest(new { message = "El ID del producto no coincide con el proporcionado." });
-            }
-
-            // Verificar que el producto exista y pertenezca al emprendimiento del usuario
-            var productoExistente = await _context.Productos
-                .FirstOrDefaultAsync(p => p.Id == id && p.EmprendimientoId == parsedEmprendimientoId);
-
-            if (productoExistente == null)
+            if (productoEnInventario == null)
             {
                 _logger.LogWarning("Producto con ID: {ProductoId} no encontrado o no pertenece al EmprendimientoId {EmprendimientoId}.", id, parsedEmprendimientoId);
                 return NotFound(new { message = $"Producto con ID {id} no encontrado o no pertenece a tu emprendimiento." });
             }
 
-            // Actualizar solo los campos permitidos
-            productoExistente.Nombre = producto.Nombre;
-            productoExistente.Descripcion = producto.Descripcion;
-            productoExistente.CostoFabricacion = producto.CostoFabricacion;
-            productoExistente.PrecioVenta = producto.PrecioVenta;
-            productoExistente.FechaCreacion = productoExistente.FechaCreacion; // no lo cambiamos
+            return Ok(productoEnInventario);
+        }
+
+        // PUT: api/Productos/5
+        // Actualiza los detalles de un producto existente.
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutProducto(Guid id, [FromBody] ProductoUpdateDto dto) // <-- ¡CORREGIDO: Usando ProductoUpdateDto!
+        {
+            if (!ModelState.IsValid)
+            {
+                _logger.LogWarning("Datos inválidos en la solicitud de actualización de producto para ID: {ProductoId}.", id);
+                return BadRequest(ModelState);
+            }
+
+            var emprendimientoIdResult = GetEmprendimientoIdFromToken();
+            if (emprendimientoIdResult.Result is UnauthorizedResult)
+            {
+                return emprendimientoIdResult.Result;
+            }
+            var parsedEmprendimientoId = emprendimientoIdResult.Value;
+
+            if (id != dto.Id)
+            {
+                _logger.LogWarning("El ID de la ruta ({RouteId}) no coincide con el ID del producto en el cuerpo ({BodyId}).", id, dto.Id);
+                return BadRequest(new { message = "El ID del producto en la URL no coincide con el proporcionado en el cuerpo de la solicitud." });
+            }
+
+            // Busca el producto existente y verifica que pertenezca al emprendimiento del usuario
+            var productoExistente = await _context.Productos
+                .FirstOrDefaultAsync(p => p.Id == id && p.EmprendimientoId == parsedEmprendimientoId);
+
+            if (productoExistente == null)
+            {
+                _logger.LogWarning("Producto con ID: {ProductoId} no encontrado o no pertenece al EmprendimientoId {EmprendimientoId} para actualización.", id, parsedEmprendimientoId);
+                return NotFound(new { message = $"Producto con ID {id} no encontrado o no pertenece a tu emprendimiento." });
+            }
+
+            // Actualiza solo los campos modificables del producto desde el DTO
+            productoExistente.Nombre = dto.Nombre;
+            productoExistente.Descripcion = dto.Descripcion;
+            productoExistente.CostoFabricacion = dto.CostoFabricacion;
+            productoExistente.PrecioVenta = dto.PrecioVenta;
+            // La fecha de creación no debe cambiarse en una actualización
 
             try
             {
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Producto con ID: {ProductoId} actualizado correctamente para EmprendimientoId {EmprendimientoId}.", id, parsedEmprendimientoId);
+                _logger.LogInformation("Producto con ID: {ProductoId} actualizado correctamente para EmprendimientoId: {EmprendimientoId}.", id, parsedEmprendimientoId);
             }
             catch (DbUpdateConcurrencyException)
             {
-                _logger.LogError("Error de concurrencia al actualizar producto con ID: {ProductoId}.", id);
-                throw;
+                if (!ProductoExists(id))
+                {
+                    _logger.LogWarning("Error de concurrencia: Producto con ID: {ProductoId} no encontrado durante la actualización.", id);
+                    return NotFound(new { message = $"Producto con ID {id} no encontrado." });
+                }
+                else
+                {
+                    _logger.LogError("Error de concurrencia al actualizar producto con ID: {ProductoId}.", id);
+                    throw;
+                }
             }
             catch (DbUpdateException ex)
             {
                 _logger.LogError(ex, "Error al actualizar producto con ID: {ProductoId}.", id);
-                return BadRequest(new { message = "Error al actualizar el producto. Verifica las claves foráneas y los datos proporcionados." });
+                return BadRequest(new { message = "Error al actualizar el producto. Verifica los datos y las restricciones de la base de datos." });
             }
 
             return NoContent();
         }
 
         // POST: api/Productos
-        [Authorize]
+        // Crea un nuevo producto y su entrada inicial en el inventario del emprendimiento del usuario.
         [HttpPost]
         public async Task<ActionResult<Producto>> PostProducto([FromBody] ProductoCreateDto dto)
         {
@@ -158,21 +201,14 @@ namespace ApiEmprendimiento.Controllers
                 return BadRequest(ModelState);
             }
 
-            // Extraer el claim de EmprendimientoId del JWT
-            var emprendimientoIdClaim = User.FindFirst("emprendimientoId")?.Value;
-            if (string.IsNullOrEmpty(emprendimientoIdClaim))
+            var emprendimientoIdResult = GetEmprendimientoIdFromToken();
+            if (emprendimientoIdResult.Result is UnauthorizedResult)
             {
-                _logger.LogWarning("No se encontró el claim 'emprendimientoId' en el token JWT.");
-                return Unauthorized(new { message = "No se encontró el EmprendimientoId en el token." });
+                return emprendimientoIdResult.Result;
             }
+            var parsedEmprendimientoId = emprendimientoIdResult.Value;
 
-            if (!Guid.TryParse(emprendimientoIdClaim, out var parsedEmprendimientoId))
-            {
-                _logger.LogWarning("El EmprendimientoId '{EmprendimientoId}' en el token es inválido.", emprendimientoIdClaim);
-                return Unauthorized(new { message = "EmprendimientoId inválido en el token." });
-            }
-
-            // Validar que el emprendimiento exista
+            // 1. Validar que el emprendimiento exista y obtener su inventario
             var emprendimiento = await _context.Emprendimientos
                 .Include(e => e.Inventario)
                 .FirstOrDefaultAsync(e => e.Id == parsedEmprendimientoId);
@@ -183,7 +219,7 @@ namespace ApiEmprendimiento.Controllers
                 return NotFound(new { message = $"Emprendimiento con ID {parsedEmprendimientoId} no encontrado." });
             }
 
-            // Verificar o crear inventario
+            // 2. Verificar o crear el Inventario del emprendimiento si no existe
             Inventario inventario = emprendimiento.Inventario;
             if (inventario == null)
             {
@@ -192,14 +228,14 @@ namespace ApiEmprendimiento.Controllers
                 {
                     Id = Guid.NewGuid(),
                     EmprendimientoId = parsedEmprendimientoId,
-                    Emprendimiento = emprendimiento,
                     FechaActualizacion = DateTimeOffset.UtcNow
                 };
                 _context.Inventarios.Add(inventario);
                 await _context.SaveChangesAsync();
+                _logger.LogInformation("Inventario creado con ID: {InventarioId} para EmprendimientoId: {EmprendimientoId}.", inventario.Id, parsedEmprendimientoId);
             }
 
-            // Crear el producto
+            // 3. Crear el Producto
             var producto = new Producto
             {
                 Id = Guid.NewGuid(),
@@ -209,45 +245,78 @@ namespace ApiEmprendimiento.Controllers
                 PrecioVenta = dto.PrecioVenta,
                 FechaCreacion = DateTimeOffset.UtcNow,
                 EmprendimientoId = parsedEmprendimientoId,
-                Emprendimiento = emprendimiento,
+                Emprendimiento = emprendimiento, // <-- ¡CORRECCIÓN ANTERIOR APLICADA AQUÍ!
             };
+
+            _context.Productos.Add(producto);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Producto principal creado con ID: {ProductoId} para EmprendimientoId: {EmprendimientoId}.", producto.Id, parsedEmprendimientoId);
+
+
+            // 4. Crear la entrada en la tabla de unión InventarioProducto
+            var inventarioProducto = new InventarioProducto
+            {
+                Id = Guid.NewGuid(),
+                InventarioId = inventario.Id,
+                ProductoId = producto.Id,
+                Cantidad = dto.CantidadInicial,
+                FechaActualizacion = DateTimeOffset.UtcNow
+            };
+
+            _context.InventarioProductos.Add(inventarioProducto);
 
             try
             {
-                _context.Productos.Add(producto);
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Producto creado con ID: {ProductoId} para EmprendimientoId: {EmprendimientoId}.", producto.Id, parsedEmprendimientoId);
+                _logger.LogInformation("Entrada de InventarioProducto creada con ID: {InventarioProductoId} para ProductoId: {ProductoId} en InventarioId: {InventarioId}.", inventarioProducto.Id, producto.Id, inventario.Id);
             }
             catch (DbUpdateException ex)
             {
-                _logger.LogError(ex, "Error al guardar el producto para EmprendimientoId: {EmprendimientoId}.", parsedEmprendimientoId);
-                return StatusCode(500, new { message = "Error al guardar el producto. Verifica los datos y las restricciones de la base de datos." });
+                _logger.LogError(ex, "Error al guardar la relación InventarioProducto para el ProductoId: {ProductoId} y EmprendimientoId: {EmprendimientoId}.", producto.Id, parsedEmprendimientoId);
+                return StatusCode(500, new { message = "Error al guardar el producto y su relación de inventario. Verifica los datos y las restricciones de la base de datos." });
             }
 
-            return CreatedAtAction(nameof(GetProducto), new { id = producto.Id }, producto);
+            return CreatedAtAction(nameof(GetProductoPorId), new { id = producto.Id }, producto);
         }
 
         // DELETE: api/Productos/5
+        // Elimina un producto y sus entradas asociadas en el inventario.
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProducto(Guid id)
         {
-            var producto = await _context.Productos.FindAsync(id);
+            var emprendimientoIdResult = GetEmprendimientoIdFromToken();
+            if (emprendimientoIdResult.Result is UnauthorizedResult)
+            {
+                return emprendimientoIdResult.Result;
+            }
+            var parsedEmprendimientoId = emprendimientoIdResult.Value;
+
+            var producto = await _context.Productos
+                .Include(p => p.InventarioProductos)
+                .FirstOrDefaultAsync(p => p.Id == id && p.EmprendimientoId == parsedEmprendimientoId);
+
             if (producto == null)
             {
-                _logger.LogWarning("Producto con ID: {ProductoId} no encontrado para eliminación.", id);
-                return NotFound(new { message = $"Producto con ID {id} no encontrado." });
+                _logger.LogWarning("Producto con ID: {ProductoId} no encontrado o no pertenece al EmprendimientoId {EmprendimientoId} para eliminación.", id, parsedEmprendimientoId);
+                return NotFound(new { message = $"Producto con ID {id} no encontrado o no pertenece a tu emprendimiento." });
             }
 
             try
             {
+                if (producto.InventarioProductos != null && producto.InventarioProductos.Any())
+                {
+                    _context.InventarioProductos.RemoveRange(producto.InventarioProductos);
+                    _logger.LogInformation("Eliminadas {Count} entradas de InventarioProducto para ProductoId: {ProductoId}.", producto.InventarioProductos.Count, id);
+                }
+
                 _context.Productos.Remove(producto);
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Producto con ID: {ProductoId} eliminado correctamente.", id);
+                _logger.LogInformation("Producto con ID: {ProductoId} y sus relaciones de inventario eliminados correctamente para EmprendimientoId: {EmprendimientoId}.", id, parsedEmprendimientoId);
             }
             catch (DbUpdateException ex)
             {
-                _logger.LogError(ex, "Error al eliminar producto con ID: {ProductoId}.", id);
-                return BadRequest(new { message = "No se puede eliminar el producto debido a restricciones de claves foráneas (por ejemplo, DetallesVenta)." });
+                _logger.LogError(ex, "Error al eliminar producto con ID: {ProductoId}. Asegúrate de que no haya dependencias externas (ej. DetallesVenta).", id);
+                return BadRequest(new { message = "No se puede eliminar el producto debido a restricciones de claves foráneas (por ejemplo, DetallesVenta) o un error de base de datos." });
             }
 
             return NoContent();
