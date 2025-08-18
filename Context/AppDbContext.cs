@@ -12,13 +12,14 @@ namespace ApiEmprendimiento.Context
         public DbSet<Emprendimiento> Emprendimientos { get; set; }
         public DbSet<Inventario> Inventarios { get; set; }
         public DbSet<DetalleVenta> DetallesVenta { get; set; }
-        public DbSet<InventarioProducto> InventarioProductos { get; set; } // Nueva tabla de unión
+        public DbSet<InventarioProducto> InventarioProductos { get; set; }
+        public DbSet<Venta> Ventas { get; set; } // ¡NUEVO! DbSet para la tabla Venta
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            // Configuración de precisión
+            // Configuración de precisión para tipos decimal
             modelBuilder.Entity<Producto>()
                 .Property(p => p.PrecioVenta)
                 .HasPrecision(18, 2);
@@ -31,31 +32,23 @@ namespace ApiEmprendimiento.Context
                 .Property(dv => dv.Precio)
                 .HasPrecision(18, 2);
 
+            modelBuilder.Entity<Venta>() // Configuración de precisión para TotalVenta
+                .Property(v => v.TotalVenta)
+                .HasPrecision(18, 2);
+
             // Relación Producto -> DetalleVenta (uno a muchos)
             modelBuilder.Entity<Producto>()
                 .HasMany(p => p.DetallesVenta)
                 .WithOne(dv => dv.Producto)
                 .HasForeignKey(dv => dv.ProductoId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict); // No eliminar producto si tiene ventas asociadas
 
-            // Relación Usuario -> DetalleVenta (uno a muchos)
-            modelBuilder.Entity<Usuario>()
-                .HasMany<DetalleVenta>()
-                .WithOne(dv => dv.Usuario)
-                .HasForeignKey(dv => dv.UsuarioId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // ***************************************************************
-            // Se elimina la relación directa Inventario -> Producto (uno a muchos)
-            // Ya no es necesaria porque ahora se maneja a través de InventarioProducto
-            // ***************************************************************
-
-            // Relación Usuario -> Emprendimiento (uno a muchos)
-            modelBuilder.Entity<Usuario>()
-                .HasOne(u => u.Emprendimiento)
-                .WithMany(e => e.Usuarios)
-                .HasForeignKey(u => u.EmprendimientoId)
-                .OnDelete(DeleteBehavior.Cascade);
+            // Relación Venta -> DetalleVenta (uno a muchos)
+            modelBuilder.Entity<Venta>()
+                .HasMany(v => v.DetallesVenta)
+                .WithOne(dv => dv.Ventas)
+                .HasForeignKey(dv => dv.VentaId)
+                .OnDelete(DeleteBehavior.Cascade); // Eliminar detalles si se elimina la venta
 
             // Relación Producto -> Emprendimiento (uno a muchos)
             modelBuilder.Entity<Producto>()
@@ -74,7 +67,7 @@ namespace ApiEmprendimiento.Context
             // Configuración de la relación Muchos a Muchos entre Inventario y Producto
             // a través de la tabla de unión InventarioProducto
             modelBuilder.Entity<InventarioProducto>()
-                .HasKey(ip => ip.Id); // Usar la propiedad Id como clave primaria para la tabla de unión
+                .HasKey(ip => ip.Id);
 
             modelBuilder.Entity<InventarioProducto>()
                 .HasOne(ip => ip.Inventario)
@@ -87,6 +80,13 @@ namespace ApiEmprendimiento.Context
                 .WithMany(p => p.InventarioProductos)
                 .HasForeignKey(ip => ip.ProductoId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Relación Venta -> Emprendimiento (uno a muchos)
+            modelBuilder.Entity<Venta>()
+                .HasOne(v => v.Emprendimiento)
+                .WithMany(e => e.Ventas)
+                .HasForeignKey(v => v.EmprendimientoId)
+                .OnDelete(DeleteBehavior.Restrict); // No eliminar emprendimiento si tiene ventas
         }
     }
 }

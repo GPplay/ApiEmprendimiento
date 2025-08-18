@@ -1,5 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ApiEmprendimiento.Models
 {
@@ -14,14 +16,16 @@ namespace ApiEmprendimiento.Models
 
         public string? Descripcion { get; set; }
 
-        // Relaciones
-        [JsonIgnore]
-        public ICollection<Usuario> Usuarios { get; set; } = new List<Usuario>();
+        // Propiedad de navegación para el Inventario (relación uno a uno)
+        public Inventario? Inventario { get; set; }
 
-        [JsonIgnore]
+        // Colección de productos asociados a este emprendimiento (relación uno a muchos)
         public ICollection<Producto> Productos { get; set; } = new List<Producto>();
 
-        // Relación uno a uno con Inventario
-        public Inventario Inventario { get; set; } = null!;
+        // Colección de ventas asociadas a este emprendimiento (relación uno a muchos)
+        public required ICollection<Venta> Ventas { get; set; } = new List<Venta>();
+
+        // ¡NUEVO! Colección de usuarios asociados a este emprendimiento (relación uno a muchos)
+        public ICollection<Usuario> Usuarios { get; set; } = new List<Usuario>();
     }
 }

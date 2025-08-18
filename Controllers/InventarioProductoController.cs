@@ -71,16 +71,15 @@ namespace ApiEmprendimiento.Controllers
                 .Include(ip => ip.Producto) // Incluye los detalles del producto
                 .Include(ip => ip.Inventario) // Incluye los detalles del inventario para el filtro
                 .Where(ip => ip.Inventario.EmprendimientoId == parsedEmprendimientoId) // **Filtra por el EmprendimientoId del token**
-                .Select(ip => new // Proyecta los resultados a un objeto anónimo para simplificar la respuesta y evitar ciclos
+                .Select(ip => new // Proyecta los resultados a un objeto anónimo con solo los campos solicitados
                 {
-                    ip.Id, // ID de la entrada InventarioProducto
-                    ProductoId = ip.Producto.Id, // ID del producto
+                    // ip.Id, // Se ha eliminado este campo de la proyección según la solicitud
                     ProductoNombre = ip.Producto.Nombre, // Nombre del producto
-                    ProductoDescripcion = ip.Producto.Descripcion, // Descripción del producto
-                    ProductoCostoFabricacion = ip.Producto.CostoFabricacion, // Costo del producto
-                    ProductoPrecioVenta = ip.Producto.PrecioVenta, // Precio de venta del producto
-                    CantidadEnStock = ip.Cantidad, // **La cantidad actual del producto en el inventario**
-                    UltimaActualizacionStock = ip.FechaActualizacion // Fecha de la última actualización de la cantidad
+                    CantidadEnStock = ip.Cantidad, // La cantidad actual del producto en el inventario
+                    EmprendimientoId = ip.Inventario.EmprendimientoId, // ID del emprendimiento
+                    InventarioId = ip.Inventario.Id // ID del inventario
+                    // Otros campos como Descripcion, CostoFabricacion, PrecioVenta, UltimaActualizacionStock
+                    // han sido eliminados de la proyección.
                 })
                 .ToListAsync();
 
@@ -113,13 +112,15 @@ namespace ApiEmprendimiento.Controllers
                 .Include(ip => ip.Producto)
                 .Include(ip => ip.Inventario)
                 .Where(ip => ip.Id == id && ip.Inventario.EmprendimientoId == parsedEmprendimientoId)
-                .Select(ip => new
+                .Select(ip => new // Proyección simplificada para el detalle individual
                 {
-                    ip.Id,
-                    ProductoId = ip.Producto.Id,
-                    ProductoNombre = ip.Producto.Nombre,
-                    CantidadEnStock = ip.Cantidad,
-                    UltimaActualizacionStock = ip.FechaActualizacion
+                    ip.Id, // El ID de InventarioProducto sigue siendo útil para este endpoint individual
+                    ProductoId = ip.Producto.Id, // ID del producto
+                    ProductoNombre = ip.Producto.Nombre, // Nombre del producto
+                    CantidadEnStock = ip.Cantidad, // Cantidad en stock
+                    EmprendimientoId = ip.Inventario.EmprendimientoId, // ID del emprendimiento
+                    InventarioId = ip.Inventario.Id, // ID del inventario
+                    UltimaActualizacionStock = ip.FechaActualizacion // Fecha de actualización
                 })
                 .FirstOrDefaultAsync();
 
@@ -171,15 +172,12 @@ namespace ApiEmprendimiento.Controllers
             }
 
             // 3. Verificar si ya existe una entrada para este producto en este inventario
-            // Si existe, se redirige o se informa que se debe usar PUT para actualizar.
             var existingInventarioProducto = await _context.InventarioProductos
                 .FirstOrDefaultAsync(ip => ip.InventarioId == inventarioDelEmprendimiento.Id && ip.ProductoId == dto.ProductoId);
 
             if (existingInventarioProducto != null)
             {
                 _logger.LogWarning("Ya existe una entrada de InventarioProducto para ProductoId: {ProductoId} en InventarioId: {InventarioId}. Redirigiendo a PUT para actualizar la cantidad.", dto.ProductoId, inventarioDelEmprendimiento.Id);
-                // Si la intención es actualizar, se podría redirigir a PUT o simplemente devolver un conflicto.
-                // Aquí, devolvemos un 409 Conflict con un mensaje claro.
                 return Conflict(new { message = $"Este producto (ID: {dto.ProductoId}) ya está registrado en el inventario. Por favor, utiliza el método PUT en '/api/InventarioProducto/{existingInventarioProducto.Id}' para actualizar su cantidad." });
             }
 
@@ -220,7 +218,6 @@ namespace ApiEmprendimiento.Controllers
                 return BadRequest(ModelState);
             }
 
-            // El ID del cuerpo del DTO debe coincidir con el ID de la ruta
             if (id != dto.Id)
             {
                 _logger.LogWarning("El ID de la ruta ({RouteId}) no coincide con el ID del InventarioProducto en el cuerpo ({BodyId}).", id, dto.Id);
@@ -234,8 +231,6 @@ namespace ApiEmprendimiento.Controllers
             }
             var parsedEmprendimientoId = emprendimientoIdResult.Value;
 
-            // 1. Buscar la entrada de InventarioProducto existente y validar pertenencia al emprendimiento
-            // Se incluye Inventario para poder filtrar por EmprendimientoId
             var existingInventarioProducto = await _context.InventarioProductos
                 .Include(ip => ip.Inventario)
                 .FirstOrDefaultAsync(ip => ip.Id == id && ip.Inventario.EmprendimientoId == parsedEmprendimientoId);
@@ -246,9 +241,8 @@ namespace ApiEmprendimiento.Controllers
                 return NotFound(new { message = $"InventarioProducto con ID {id} no encontrado o no pertenece a tu emprendimiento." });
             }
 
-            // 2. Actualizar la cantidad y la fecha de actualización
             existingInventarioProducto.Cantidad = dto.Cantidad;
-            existingInventarioProducto.FechaActualizacion = DateTimeOffset.UtcNow; // Actualiza la fecha de la última modificación de cantidad
+            existingInventarioProducto.FechaActualizacion = DateTimeOffset.UtcNow;
 
             try
             {
@@ -265,7 +259,7 @@ namespace ApiEmprendimiento.Controllers
                 else
                 {
                     _logger.LogError("Error de concurrencia al actualizar InventarioProducto con ID: {InventarioProductoId}.", id);
-                    throw; // Vuelve a lanzar la excepción si es un problema de concurrencia real
+                    throw;
                 }
             }
             catch (DbUpdateException ex)
@@ -274,7 +268,7 @@ namespace ApiEmprendimiento.Controllers
                 return BadRequest(new { message = "Error al actualizar la cantidad del producto en el inventario. Verifica los datos proporcionados." });
             }
 
-            return NoContent(); // 204 No Content indica éxito sin devolver un cuerpo de respuesta
+            return NoContent();
         }
 
         // DELETE: api/InventarioProducto/5
@@ -289,9 +283,8 @@ namespace ApiEmprendimiento.Controllers
             }
             var parsedEmprendimientoId = emprendimientoIdResult.Value;
 
-            // 1. Buscar la entrada de InventarioProducto y validar pertenencia al emprendimiento
             var inventarioProducto = await _context.InventarioProductos
-                .Include(ip => ip.Inventario) // Necesario para el filtro por EmprendimientoId
+                .Include(ip => ip.Inventario)
                 .FirstOrDefaultAsync(ip => ip.Id == id && ip.Inventario.EmprendimientoId == parsedEmprendimientoId);
 
             if (inventarioProducto == null)
@@ -300,7 +293,6 @@ namespace ApiEmprendimiento.Controllers
                 return NotFound(new { message = $"InventarioProducto con ID {id} no encontrado o no pertenece a tu emprendimiento." });
             }
 
-            // 2. Eliminar la entrada
             _context.InventarioProductos.Remove(inventarioProducto);
 
             try
@@ -314,7 +306,7 @@ namespace ApiEmprendimiento.Controllers
                 return BadRequest(new { message = "Error al eliminar el producto del inventario debido a restricciones de base de datos." });
             }
 
-            return NoContent(); // 204 No Content para una eliminación exitosa
+            return NoContent();
         }
 
         // Método auxiliar para verificar si existe una entrada de InventarioProducto

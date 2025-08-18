@@ -3,6 +3,7 @@ using ApiEmprendimiento.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Threading.Tasks;
+using System.Collections.Generic; // Agregado para ICollection
 
 namespace ApiEmprendimiento.Services
 {
@@ -21,7 +22,8 @@ namespace ApiEmprendimiento.Services
             {
                 Id = Guid.NewGuid(),
                 Nombre = nombre,
-                Descripcion = descripcion
+                Descripcion = descripcion,
+                Ventas = new List<Venta>() // ¡CORREGIDO! Inicializa la colección Ventas
             };
 
             var inventario = new Inventario
@@ -36,7 +38,7 @@ namespace ApiEmprendimiento.Services
             _context.Inventarios.Add(inventario);
             await _context.SaveChangesAsync();
 
-            emprendimiento.Inventario = inventario;
+            emprendimiento.Inventario = inventario; // Asigna la propiedad de navegación Inventario después de guardar
             return emprendimiento;
         }
     }
