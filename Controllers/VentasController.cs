@@ -47,6 +47,7 @@ namespace ApiEmprendimiento.Controllers
 
         // POST: api/Ventas
         // Registra una nueva venta, descontando los productos del inventario.
+        // ¡ACTUALIZADO PARA REGISTRAR GANANCIAS POR VENTAS MENSUALES!
         [HttpPost]
         public async Task<IActionResult> RegistrarVenta([FromBody] VentaCreateDto ventaDto)
         {
@@ -63,7 +64,7 @@ namespace ApiEmprendimiento.Controllers
             }
             var parsedEmprendimientoId = emprendimientoIdResult.Value;
 
-            // Obtener el objeto Emprendimiento para asignarlo a la Venta
+            // Obtener el objeto Emprendimiento para asignarlo a la Venta y al ReporteFinancieroMensual
             var emprendimiento = await _context.Emprendimientos
                                         .FirstOrDefaultAsync(e => e.Id == parsedEmprendimientoId);
 
@@ -82,12 +83,13 @@ namespace ApiEmprendimiento.Controllers
                     Id = Guid.NewGuid(),
                     FechaVenta = DateTimeOffset.UtcNow,
                     EmprendimientoId = parsedEmprendimientoId,
-                    Emprendimiento = emprendimiento, // ¡CORREGIDO! Asignar la propiedad de navegación 'Emprendimiento'
-                    // TotalVenta se calculará al final
+                    Emprendimiento = emprendimiento,
+                    TotalVenta = 0 // Se calculará en el bucle
                 };
 
                 _context.Ventas.Add(nuevaVenta);
-                await _context.SaveChangesAsync(); // Guardar la venta para obtener su ID
+                // Guardar la venta antes de procesar los detalles si es necesario para tener su ID
+                await _context.SaveChangesAsync();
 
                 decimal totalCalculado = 0;
                 var detallesVenta = new List<DetalleVenta>();
@@ -96,7 +98,7 @@ namespace ApiEmprendimiento.Controllers
                 {
                     // 1. Obtener el producto y su entrada en InventarioProducto
                     var inventarioProducto = await _context.InventarioProductos
-                        .Include(ip => ip.Producto)
+                        .Include(ip => ip.Producto) // Necesario para CostoFabricacion y PrecioVenta
                         .Include(ip => ip.Inventario)
                         .FirstOrDefaultAsync(ip => ip.ProductoId == itemDto.ProductoId && ip.Inventario.EmprendimientoId == parsedEmprendimientoId);
 
@@ -118,14 +120,18 @@ namespace ApiEmprendimiento.Controllers
                     inventarioProducto.Cantidad -= itemDto.Cantidad;
                     inventarioProducto.FechaActualizacion = DateTimeOffset.UtcNow; // Actualizar fecha de stock
 
-                    // 3. Crear el detalle de la venta
+                    // 3. ¡NUEVO! Recalcular CostoActualEnStock después de cambiar la cantidad
+                    // Esto se mantiene, aunque el TotalGastosFabricacionMes sea la métrica clave para la gráfica
+                    inventarioProducto.CostoActualEnStock = inventarioProducto.Cantidad * inventarioProducto.Producto.CostoFabricacion;
+
+                    // 4. Crear el detalle de la venta
                     var detalle = new DetalleVenta
                     {
                         Id = Guid.NewGuid(),
                         VentaId = nuevaVenta.Id,
-                        Ventas = nuevaVenta, // ¡CORREGIDO! Asignar la propiedad de navegación 'Venta' (singular)
+                        Ventas = nuevaVenta,
                         ProductoId = itemDto.ProductoId,
-                        Producto = inventarioProducto.Producto, // ¡CORREGIDO! Asignar la propiedad de navegación 'Producto'
+                        Producto = inventarioProducto.Producto,
                         Cantidad = itemDto.Cantidad,
                         Precio = inventarioProducto.Producto.PrecioVenta, // Usar el precio de venta actual del producto
                         FechaCreacion = DateTimeOffset.UtcNow
@@ -136,20 +142,51 @@ namespace ApiEmprendimiento.Controllers
 
                 _context.DetallesVenta.AddRange(detallesVenta);
                 nuevaVenta.TotalVenta = totalCalculado; // Asignar el total calculado a la venta
-                _context.Ventas.Update(nuevaVenta); // Actualizar la venta con el total
+                _context.Ventas.Update(nuevaVenta); // Marcar la venta para actualización con el total
 
-                await _context.SaveChangesAsync(); // Guardar los detalles de venta y las actualizaciones de inventario
+                // 5. ¡NUEVO! Actualizar el TotalGananciasVentasMes en ReporteFinancieroMensual
+                var ahora = DateTimeOffset.UtcNow;
+                var anoActual = ahora.Year;
+                var mesActual = ahora.Month;
+
+                var reporteMensual = await _context.ReportesFinancierosMensuales
+                    .FirstOrDefaultAsync(r => r.EmprendimientoId == parsedEmprendimientoId && r.Ano == anoActual && r.Mes == mesActual);
+
+                if (reporteMensual == null)
+                {
+                    reporteMensual = new ReporteFinancieroMensual
+                    {
+                        Id = Guid.NewGuid(),
+                        EmprendimientoId = parsedEmprendimientoId,
+                        Emprendimiento = emprendimiento, // Asignar la propiedad de navegación
+                        Ano = anoActual,
+                        Mes = mesActual,
+                        TotalGastosFabricacionMes = 0, // Se inicializa en 0
+                        TotalGananciasVentasMes = 0, // Se inicializa en 0
+                        FechaUltimaActualizacion = ahora
+                    };
+                    _context.ReportesFinancierosMensuales.Add(reporteMensual);
+                    _logger.LogInformation("Creado nuevo ReporteFinancieroMensual para EmprendimientoId: {EmprendimientoId}, Año: {Ano}, Mes: {Mes}.", parsedEmprendimientoId, anoActual, mesActual);
+                }
+
+                // Sumar el total de la venta al total de ganancias del mes
+                reporteMensual.TotalGananciasVentasMes += nuevaVenta.TotalVenta;
+                reporteMensual.FechaUltimaActualizacion = ahora; // Actualizar la fecha de actualización
+
+                _context.ReportesFinancierosMensuales.Update(reporteMensual); // Marcar para actualización
+
+                await _context.SaveChangesAsync(); // Guardar todos los cambios: DetalleVenta, InventarioProducto y ReporteFinancieroMensual
 
                 await transaction.CommitAsync(); // Confirmar la transacción
-                _logger.LogInformation("Venta con ID: {VentaId} registrada correctamente para EmprendimientoId: {EmprendimientoId}. Total: {TotalVenta}", nuevaVenta.Id, parsedEmprendimientoId, nuevaVenta.TotalVenta);
+                _logger.LogInformation("Venta con ID: {VentaId} registrada correctamente y ganancias actualizadas para EmprendimientoId: {EmprendimientoId}. Total: {TotalVenta}", nuevaVenta.Id, parsedEmprendimientoId, nuevaVenta.TotalVenta);
 
                 return CreatedAtAction(nameof(GetVentaPorId), new { id = nuevaVenta.Id }, new { ventaId = nuevaVenta.Id, total = nuevaVenta.TotalVenta, fecha = nuevaVenta.FechaVenta });
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync(); // Revertir la transacción si algo falla
-                _logger.LogError(ex, "Error al registrar la venta para EmprendimientoId: {EmprendimientoId}.", parsedEmprendimientoId);
-                return StatusCode(500, new { message = "Ocurrió un error al procesar la venta. La transacción ha sido revertida." });
+                _logger.LogError(ex, "Error al registrar la venta y actualizar los reportes financieros para EmprendimientoId: {EmprendimientoId}.", parsedEmprendimientoId);
+                return StatusCode(500, new { message = "Ocurrió un error al procesar la venta y registrar las ganancias. La transacción ha sido revertida." });
             }
         }
 
@@ -237,6 +274,7 @@ namespace ApiEmprendimiento.Controllers
         // DELETE: api/Ventas/5
         // Elimina una venta y revierte el stock de los productos.
         // CUIDADO: La eliminación de ventas podría tener implicaciones contables.
+        // No afecta los reportes financieros mensuales una vez registrados.
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteVenta(Guid id)
         {
@@ -268,21 +306,26 @@ namespace ApiEmprendimiento.Controllers
                 {
                     var inventarioProducto = await _context.InventarioProductos
                         .Include(ip => ip.Inventario)
+                        .Include(ip => ip.Producto) // Necesario para CostoFabricacion
                         .FirstOrDefaultAsync(ip => ip.ProductoId == detalle.ProductoId && ip.Inventario.EmprendimientoId == parsedEmprendimientoId);
 
                     if (inventarioProducto != null)
                     {
                         inventarioProducto.Cantidad += detalle.Cantidad; // Sumar la cantidad vendida de nuevo al stock
                         inventarioProducto.FechaActualizacion = DateTimeOffset.UtcNow; // Actualizar fecha de stock
+
+                        // Recalcular CostoActualEnStock
+                        inventarioProducto.CostoActualEnStock = inventarioProducto.Cantidad * inventarioProducto.Producto.CostoFabricacion;
                     }
                     else
                     {
-                        // Esto podría indicar una inconsistencia de datos, o que el producto fue eliminado del inventario
-                        // antes de revertir la venta. Se debe decidir cómo manejar este escenario (ej. loggear error,
-                        // o crear la entrada de InventarioProducto si no existe).
                         _logger.LogError("Error de consistencia de datos: InventarioProducto no encontrado para ProductoId: {ProductoId} al revertir venta {VentaId}.", detalle.ProductoId, venta.Id);
                     }
                 }
+
+                // NOTA: La eliminación de una venta NO revierte los ReporteFinancieroMensual.
+                // Esto es consistente con la lógica de que los gastos/ganancias son "incurridos" en el mes.
+                // Si se necesita revertir los reportes, se necesitaría lógica adicional aquí.
 
                 _context.Ventas.Remove(venta); // Eliminar la venta y sus detalles (debido a OnDelete(Cascade))
                 await _context.SaveChangesAsync();

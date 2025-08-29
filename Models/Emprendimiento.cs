@@ -27,5 +27,8 @@ namespace ApiEmprendimiento.Models
 
         // ¡NUEVO! Colección de usuarios asociados a este emprendimiento (relación uno a muchos)
         public ICollection<Usuario> Usuarios { get; set; } = new List<Usuario>();
+
+        // En Emprendimiento.cs
+        public ICollection<ReporteFinancieroMensual> ReportesFinancierosMensuales { get; set; } = new List<ReporteFinancieroMensual>();
     }
 }

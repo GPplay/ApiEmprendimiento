@@ -13,7 +13,10 @@ namespace ApiEmprendimiento.Context
         public DbSet<Inventario> Inventarios { get; set; }
         public DbSet<DetalleVenta> DetallesVenta { get; set; }
         public DbSet<InventarioProducto> InventarioProductos { get; set; }
-        public DbSet<Venta> Ventas { get; set; } // ¡NUEVO! DbSet para la tabla Venta
+        public DbSet<Venta> Ventas { get; set; }
+        // ¡NUEVO! DbSet para la tabla ReporteFinancieroMensual
+        public DbSet<ReporteFinancieroMensual> ReportesFinancierosMensuales { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -32,23 +35,33 @@ namespace ApiEmprendimiento.Context
                 .Property(dv => dv.Precio)
                 .HasPrecision(18, 2);
 
-            modelBuilder.Entity<Venta>() // Configuración de precisión para TotalVenta
+            modelBuilder.Entity<Venta>()
                 .Property(v => v.TotalVenta)
                 .HasPrecision(18, 2);
+
+            // ¡NUEVO! Configuración de precisión para ReporteFinancieroMensual
+            modelBuilder.Entity<ReporteFinancieroMensual>()
+                .Property(rfm => rfm.TotalGastosFabricacionMes)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<ReporteFinancieroMensual>()
+                .Property(rfm => rfm.TotalGananciasVentasMes)
+                .HasPrecision(18, 2);
+
 
             // Relación Producto -> DetalleVenta (uno a muchos)
             modelBuilder.Entity<Producto>()
                 .HasMany(p => p.DetallesVenta)
                 .WithOne(dv => dv.Producto)
                 .HasForeignKey(dv => dv.ProductoId)
-                .OnDelete(DeleteBehavior.Restrict); // No eliminar producto si tiene ventas asociadas
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Relación Venta -> DetalleVenta (uno a muchos)
             modelBuilder.Entity<Venta>()
                 .HasMany(v => v.DetallesVenta)
                 .WithOne(dv => dv.Ventas)
                 .HasForeignKey(dv => dv.VentaId)
-                .OnDelete(DeleteBehavior.Cascade); // Eliminar detalles si se elimina la venta
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Relación Producto -> Emprendimiento (uno a muchos)
             modelBuilder.Entity<Producto>()
@@ -86,7 +99,22 @@ namespace ApiEmprendimiento.Context
                 .HasOne(v => v.Emprendimiento)
                 .WithMany(e => e.Ventas)
                 .HasForeignKey(v => v.EmprendimientoId)
-                .OnDelete(DeleteBehavior.Restrict); // No eliminar emprendimiento si tiene ventas
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Relación Usuario -> Emprendimiento (uno a muchos)
+            modelBuilder.Entity<Usuario>()
+                .HasOne(u => u.Emprendimiento)
+                .WithMany(e => e.Usuarios)
+                .HasForeignKey(u => u.EmprendimientoId)
+                .OnDelete(DeleteBehavior.Restrict); // O Cascade si se eliminan usuarios con el emprendimiento
+
+
+            // ¡NUEVO! Relación ReporteFinancieroMensual -> Emprendimiento (muchos a uno)
+            modelBuilder.Entity<ReporteFinancieroMensual>()
+                .HasOne(rfm => rfm.Emprendimiento) // Un reporte pertenece a UN emprendimiento
+                .WithMany(e => e.ReportesFinancierosMensuales) // Un emprendimiento tiene MUCHOS reportes (necesitas añadir esta colección en Emprendimiento.cs)
+                .HasForeignKey(rfm => rfm.EmprendimientoId)
+                .OnDelete(DeleteBehavior.Cascade); // Si se elimina un emprendimiento, sus reportes también se eliminan.
         }
     }
 }

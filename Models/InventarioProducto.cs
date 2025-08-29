@@ -33,6 +33,13 @@ namespace ApiEmprendimiento.Models
         [Required]
         public DateTimeOffset FechaActualizacion { get; set; } = DateTimeOffset.UtcNow;
 
+        // ¡NUEVO! Propiedad para almacenar el costo actual de las unidades de este producto en stock.
+        // Esto es para propósitos informativos sobre el valor del inventario en tiempo real.
+        [Required]
+        [Range(0, 99999999999.99)] // Rango para valores monetarios
+        [Column(TypeName = "decimal(18,2)")] // Asegura precisión en la base de datos
+        public decimal CostoActualEnStock { get; set; } = 0; // Inicializar en 0
+
         // Propiedad de navegación para el Inventario asociado.
         // Permite a Entity Framework Core cargar el objeto Inventario relacionado.
         [ForeignKey(nameof(InventarioId))]

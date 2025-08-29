@@ -205,12 +205,13 @@ namespace ApiEmprendimiento.Controllers
             {
                 Id = Guid.NewGuid(),
                 VentaId = dto.VentaId,
-                Ventas = ventaPadre, // Asignar el objeto Venta completo
+                Ventas = ventaPadre, // Asignar el objeto Venta a la propiedad de navegación 'Ventas'
                 ProductoId = dto.ProductoId,
-                Producto = productoAsociado, // Asignar el objeto Producto completo
+                Producto = productoAsociado, // Asignar el objeto Producto a la propiedad de navegación 'Producto'
                 Cantidad = dto.Cantidad,
-                Precio = dto.Precio,
-                FechaCreacion = DateTimeOffset.UtcNow // Usar FechaCreacion, como en tu modelo
+                // Precio: Se obtiene del producto asociado automáticamente
+                Precio = productoAsociado.PrecioVenta, // ¡CORRECCIÓN! Usar PrecioVenta del Producto
+                FechaCreacion = DateTimeOffset.UtcNow // Usar FechaCreacion del modelo
             };
 
             _context.DetallesVenta.Add(detalleVenta);
@@ -218,15 +219,30 @@ namespace ApiEmprendimiento.Controllers
             try
             {
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Detalle de venta con ID: {DetalleVentaId} creado correctamente para VentaId: {VentaId}.", detalleVenta.Id, detalleVenta.VentaId);
+
+                // Calcular el precio final de este detalle de venta para la respuesta
+                var precioFinalDetalle = detalleVenta.Cantidad * detalleVenta.Precio;
+
+                _logger.LogInformation("Detalle de venta con ID: {DetalleVentaId} creado correctamente para VentaId: {VentaId}. Precio Final de Detalle: {PrecioFinalDetalle}", detalleVenta.Id, detalleVenta.VentaId, precioFinalDetalle);
+
+                // Devolver el DetalleVenta creado, incluyendo el "PRECIO FINAL" de este ítem
+                return CreatedAtAction(nameof(GetDetalleVenta), new { id = detalleVenta.Id }, new
+                {
+                    detalleVenta.Id,
+                    detalleVenta.VentaId,
+                    detalleVenta.ProductoId,
+                    ProductoNombre = productoAsociado.Nombre, // Opcional: para mejor contexto
+                    detalleVenta.Cantidad,
+                    detalleVenta.Precio, // Precio unitario
+                    PrecioFinal = precioFinalDetalle, // ¡"PRECIO FINAL" del ítem!
+                    detalleVenta.FechaCreacion
+                });
             }
             catch (DbUpdateException ex)
             {
                 _logger.LogError(ex, "Error al guardar el detalle de venta para ProductoId: {ProductoId} y VentaId: {VentaId}.", dto.ProductoId, dto.VentaId);
                 return StatusCode(500, new { message = "Error al guardar el detalle de venta. Verifica los datos y las restricciones de la base de datos." });
             }
-
-            return CreatedAtAction(nameof(GetDetalleVenta), new { id = detalleVenta.Id }, detalleVenta);
         }
 
         [HttpDelete("{id}")]
